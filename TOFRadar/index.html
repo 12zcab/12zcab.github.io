@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSerial Multi-ToF Dashboard</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background: #0f172a;
+            color: #f8fafc;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 700px;
+            margin: auto;
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        h1 { margin-bottom: 5px; color: #38bdf8; }
+        .serial-control { margin-bottom: 25px; margin-top: 15px; }
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            background: #10b981;
+            color: #ffffff;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        button:hover { background: #059669; }
+        button.disconnect { background: #ef4444; }
+        button.disconnect:hover { background: #dc2626; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 20px;
+        }
+        .card {
+            background: #334155;
+            padding: 20px;
+            border-radius: 8px;
+            border-bottom: 4px solid #38bdf8;
+            transition: transform 0.2s;
+        }
+        .value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #38bdf8;
+            margin: 10px 0;
+        }
+        .degree { font-size: 13px; color: #94a3b8; font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSerial ToF Dashboard</h1>
+        <div class="serial-control">
+            <button id="connect-btn" onclick="toggleSerial()">Connect ESP32-C3</button>
+        </div>
+        <div id="sensor-grid" class="grid"></div>
+    </div>
+
+    <script>
+        let port;
+        let reader;
+        let keepReading = false;
+
+        async function toggleSerial() {
+            const btn = document.getElementById('connect-btn');
+            
+            if (!keepReading) {
+                try {
+                    // Prompt user to select ESP32 USB COM Port
+                    port = await navigator.serial.requestPort();
+                    await port.open({ baudRate: 115200 });
+                    
+                    keepReading = true;
+                    btn.textContent = "Disconnect";
+                    btn.className = "disconnect";
+                    
+                    readSerialLoop();
+                } catch (err) {
+                    console.error("Serial connection rejected:", err);
+                    alert("Failed to open serial port. Ensure no other apps (like Arduino IDE) are using it.");
+                }
+            } else {
+                // Signal loop shutdown
+                keepReading = false;
+                if (reader) {
+                    await reader.cancel();
+                }
+                await port.close();
+                btn.textContent = "Connect ESP32-C3";
+                btn.className = "";
+            }
+        }
+
+        async function readSerialLoop() {
+            // TextDecoder stream handles chunk fragments across serial frame buffers
+            const textDecoder = new TextDecoderStream();
+            const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
+            reader = textDecoder.readable.getReader();
+
+            let buffer = "";
+
+            while (port.readable && keepReading) {
+                try {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += value;
+                    // Split stream buffer by newlines sent from Arduino (.println)
+                    let lines = buffer.split("\n");
+                    buffer = lines.pop(); // Keep uncompleted line chunk in buffer
+
+                    for (let line of lines) {
+                        line = line.trim();
+                        if (line.startsWith("[") && line.endsWith("]")) {
+                            try {
+                                const parsedData = JSON.parse(line);
+                                renderDashboard(parsedData);
+                            } catch (jsonErr) {
+                                // Skip half-baked line mutations safely
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error("Stream reading context dropped:", error);
+                    break;
+                }
+            }
+        }
+
+        function renderDashboard(sensorsList) {
+            const grid = document.getElementById('sensor-grid');
+            grid.innerHTML = ''; // Clear prior interface generation frame
+
+            sensorsList.forEach((sensor, index) => {
+                let displayColor = "#38bdf8";
+                let valText = "";
+
+                if (sensor.distance === -1) {
+                    valText = "Timeout";
+                    displayColor = "#f59e0b"; // Warning Orange
+                } else if (sensor.distance === -2) {
+                    valText = "Offline";
+                    displayColor = "#ef4444"; // Error Red
+                } else {
+                    valText = sensor.distance + " mm";
+                }
+
+                grid.innerHTML += `
+                    <div class="card" style="border-bottom-color: ${displayColor}">
+                        <h3>Sensor #${index + 1}</h3>
+                        <div class="value" style="color: ${displayColor}">${valText}</div>
+                        <div class="degree">📐 Azimuth: ${sensor.degree}°</div>
+                    </div>
+                `;
+            });
+        }
+    </script>
+</body>
+</html>
