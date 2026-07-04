@@ -3,110 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebSerial Multi-ToF Dashboard</title>
+    <title>ToF WebSerial Radar Graph</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             text-align: center;
-            background: #0f172a;
+            background: #090d16;
             color: #f8fafc;
             margin: 0;
             padding: 20px;
         }
         .container {
-            max-width: 700px;
+            max-width: 800px;
             margin: auto;
-            background: #1e293b;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            background: #111827;
+            padding: 25px;
+            border-radius: 16px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.7);
         }
-        h1 { margin-bottom: 5px; color: #38bdf8; }
-        .serial-control { margin-bottom: 25px; margin-top: 15px; }
+        h1 { margin: 0 0 5px 0; color: #10b981; font-size: 24px; }
+        .serial-control { margin-bottom: 20px; }
         button {
-            padding: 10px 20px;
-            border-radius: 6px;
+            padding: 10px 24px;
+            border-radius: 8px;
             border: none;
             background: #10b981;
             color: #ffffff;
             font-weight: bold;
             cursor: pointer;
             font-size: 14px;
+            transition: all 0.2s;
         }
         button:hover { background: #059669; }
         button.disconnect { background: #ef4444; }
         button.disconnect:hover { background: #dc2626; }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-            gap: 20px;
+        .radar-box {
+            position: relative;
+            display: inline-block;
+            background: #030712;
+            border: 2px solid #1f2937;
+            border-radius: 50%;
+            padding: 10px;
         }
-        .card {
-            background: #334155;
-            padding: 20px;
-            border-radius: 8px;
-            border-bottom: 4px solid #38bdf8;
-            transition: transform 0.2s;
+        canvas {
+            display: block;
+            background: transparent;
         }
-        .value {
-            font-size: 28px;
-            font-weight: bold;
-            color: #38bdf8;
-            margin: 10px 0;
-        }
-        .degree { font-size: 13px; color: #94a3b8; font-weight: 500; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>WebSerial ToF Dashboard</h1>
+        <h1>ToF LiDAR Scope</h1>
         <div class="serial-control">
-            <button id="connect-btn" onclick="toggleSerial()">Connect ESP32-C3</button>
+            <button id="connect-btn" onclick="toggleSerial()">Connect Target Device</button>
         </div>
-        <div id="sensor-grid" class="grid"></div>
+        <div class="radar-box">
+            <canvas id="radarCanvas" width="500" height="500"></canvas>
+        </div>
     </div>
 
     <script>
-        let port;
-        let reader;
-        let keepReading = false;
+        let port, reader, keepReading = false;
+        const canvas = document.getElementById('radarCanvas');
+        const ctx = canvas.getContext('2d');
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const maxRadarRange = 1200; // Max mapping range scale in mm (adjust based on your environment)
+        const radiusScale = (canvas.width / 2 - 30) / maxRadarRange;
+
+        // Tracks live scanning points for persistence fading
+        let mappedPoints = [];
+
+        // Main rendering engine loop (running at 60fps for dynamic transparency decay)
+        function renderLoop() {
+            // Apply semi-transparent trailing fill instead of complete clearing to build a fading effect
+            ctx.fillStyle = "rgba(3, 7, 18, 0.08)";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            drawGrid();
+
+            // Filter out fully dissolved data array nodes
+            mappedPoints = mappedPoints.filter(p => p.alpha > 0.01);
+
+            // Draw tracked sensor footprints
+            mappedPoints.forEach(point => {
+                // Adjust degrees so 0° points up and maps clockwise around the circumference
+                let adjustedRad = (point.degree - 90) * Math.PI / 180;
+                
+                let targetX = centerX + (point.distance * radiusScale) * Math.cos(adjustedRad);
+                let targetY = centerY + (point.distance * radiusScale) * Math.sin(adjustedRad);
+
+                // Draw distance marker dot
+                ctx.beginPath();
+                ctx.arc(targetX, targetY, 6, 0, 2 * Math.PI);
+                ctx.fillStyle = `rgba(16, 185, 129, ${point.alpha})`;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = "#10b981";
+                ctx.fill();
+                ctx.shadowBlur = 0; // Reset canvas glow states
+
+                // Slowly drop alpha over time
+                point.alpha -= 0.015; 
+            });
+
+            requestAnimationFrame(renderLoop);
+        }
+
+        function drawGrid() {
+            // Draw baseline crosshairs and concentric rings
+            ctx.strokeStyle = "rgba(16, 185, 129, 0.15)";
+            ctx.lineWidth = 1;
+            
+            // Concentric range indicators
+            for (let r = 300; r <= maxRadarRange; r += 300) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, r * radiusScale, 0, 2 * Math.PI);
+                ctx.stroke();
+                
+                // Add distance range text labels
+                ctx.fillStyle = "rgba(148, 163, 184, 0.5)";
+                ctx.font = "10px sans-serif";
+                ctx.fillText(r + "mm", centerX + 5, centerY - (r * radiusScale) + 12);
+            }
+
+            // Grid Axes Lines
+            ctx.beginPath();
+            ctx.moveTo(centerX, 10); ctx.lineTo(centerX, canvas.height - 10);
+            ctx.moveTo(10, centerY); ctx.lineTo(canvas.width - 10, centerY);
+            ctx.stroke();
+
+            // Compass text anchors (Top=0, Bottom=180, Right=90, Left=270)
+            ctx.fillStyle = "#34d399";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText("0°", centerX, 22);
+            ctx.fillText("180°", centerX, canvas.height - 12);
+            ctx.fillText("270°", 25, centerY + 4);
+            ctx.fillText("90°", canvas.width - 25, centerY + 4);
+
+            // Origin core sensor center position node
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 5, 0, 2 * Math.PI);
+            ctx.fillStyle = "#38bdf8";
+            ctx.fill();
+        }
 
         async function toggleSerial() {
             const btn = document.getElementById('connect-btn');
-            
             if (!keepReading) {
                 try {
-                    // Prompt user to select ESP32 USB COM Port
                     port = await navigator.serial.requestPort();
                     await port.open({ baudRate: 115200 });
-                    
                     keepReading = true;
-                    btn.textContent = "Disconnect";
+                    btn.textContent = "Disconnect Scope";
                     btn.className = "disconnect";
-                    
                     readSerialLoop();
                 } catch (err) {
-                    console.error("Serial connection rejected:", err);
-                    alert("Failed to open serial port. Ensure no other apps (like Arduino IDE) are using it.");
+                    alert("Serial connection rejected.");
                 }
             } else {
-                // Signal loop shutdown
                 keepReading = false;
-                if (reader) {
-                    await reader.cancel();
-                }
+                if (reader) await reader.cancel();
                 await port.close();
-                btn.textContent = "Connect ESP32-C3";
+                btn.textContent = "Connect Target Device";
                 btn.className = "";
             }
         }
 
         async function readSerialLoop() {
-            // TextDecoder stream handles chunk fragments across serial frame buffers
             const textDecoder = new TextDecoderStream();
             const readableStreamClosed = port.readable.pipeTo(textDecoder.writable);
             reader = textDecoder.readable.getReader();
-
             let buffer = "";
 
             while (port.readable && keepReading) {
@@ -115,55 +182,40 @@
                     if (done) break;
                     
                     buffer += value;
-                    // Split stream buffer by newlines sent from Arduino (.println)
                     let lines = buffer.split("\n");
-                    buffer = lines.pop(); // Keep uncompleted line chunk in buffer
+                    buffer = lines.pop();
 
                     for (let line of lines) {
                         line = line.trim();
                         if (line.startsWith("[") && line.endsWith("]")) {
                             try {
                                 const parsedData = JSON.parse(line);
-                                renderDashboard(parsedData);
-                            } catch (jsonErr) {
-                                // Skip half-baked line mutations safely
-                            }
+                                // Queue update instances into visual pipeline
+                                parsedData.forEach(sensor => {
+                                    if (sensor.distance > 0) {
+                                        // Overwrite existing telemetry tracking if degree collision happens
+                                        let existing = mappedPoints.find(p => p.degree === sensor.degree);
+                                        if (existing) {
+                                            existing.distance = sensor.distance;
+                                            existing.alpha = 1.0; // Recharge visibility on refreshed detection pulse
+                                        } else {
+                                            mappedPoints.push({
+                                                degree: sensor.degree,
+                                                distance: sensor.distance,
+                                                alpha: 1.0
+                                            });
+                                        }
+                                    }
+                                });
+                            } catch (jsonErr) {}
                         }
                     }
-                } catch (error) {
-                    console.error("Stream reading context dropped:", error);
-                    break;
-                }
+                } catch (error) { break; }
             }
         }
 
-        function renderDashboard(sensorsList) {
-            const grid = document.getElementById('sensor-grid');
-            grid.innerHTML = ''; // Clear prior interface generation frame
-
-            sensorsList.forEach((sensor, index) => {
-                let displayColor = "#38bdf8";
-                let valText = "";
-
-                if (sensor.distance === -1) {
-                    valText = "Timeout";
-                    displayColor = "#f59e0b"; // Warning Orange
-                } else if (sensor.distance === -2) {
-                    valText = "Offline";
-                    displayColor = "#ef4444"; // Error Red
-                } else {
-                    valText = sensor.distance + " mm";
-                }
-
-                grid.innerHTML += `
-                    <div class="card" style="border-bottom-color: ${displayColor}">
-                        <h3>Sensor #${index + 1}</h3>
-                        <div class="value" style="color: ${displayColor}">${valText}</div>
-                        <div class="degree">📐 Azimuth: ${sensor.degree}°</div>
-                    </div>
-                `;
-            });
-        }
+        // Initialize frame rendering engine sequence
+        requestAnimationFrame(renderLoop);
     </script>
 </body>
 </html>
