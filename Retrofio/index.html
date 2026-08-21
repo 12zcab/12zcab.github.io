@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retrofio Terminal OS</title>
+    <!-- Load Z80.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/gh/mamedev/z80.js/z80.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: black;
+            overflow: hidden;
+            display: flex;
+            font-family: monospace;
+            caret-color: transparent;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: default;
+        }
+        .tv {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+        #term {
+            height: 100vh;
+            color: #0c7b46;
+            font-size: 16px;
+            padding: 20px;
+            box-sizing: border-box;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            overflow-y: auto;
+            text-shadow: 0 0.2rem 1rem #0c7b46;
+            line-height: 1.2em;
+            caret-color: transparent !important;
+            outline: none;
+        }
+        .cursor {
+            background: #0c7b46;
+            color: #000;
+            animation: blink 1s steps(2, start) infinite;
+            display: inline-block;
+            width: 0.6em;
+            height: 1.1em;
+            vertical-align: sub;
+        }
+        @keyframes blink { to { opacity: 0; } }
+        .flicker {
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: rgba(18, 16, 16, 0.2);
+            opacity: 0;
+            z-index: 1000;
+            pointer-events: none;
+            animation: flicker 0.12s infinite;
+        }
+        @keyframes flicker {
+          0% { opacity: 0.552; } 5% { opacity: 0.48287; } 10% { opacity: 0.59134; }
+          15.0% { opacity: 0.79543; } 20% { opacity: 0.75134; } 25% { opacity: 0.1956; }
+          30.0% { opacity: 0.90687; } 35% { opacity: 0.122; } 40% { opacity: 0.62254; }
+          45% { opacity: 0.56977; } 50% { opacity: 0.9925; } 55.0% { opacity: 0.55487; }
+          60.0% { opacity: 0.16607; } 65% { opacity: 0.12353; } 70% { opacity: 0.2214; }
+          75% { opacity: 0.67908; } 80% { opacity: 0.97163; } 85.0% { opacity: 0.1275; }
+          90% { opacity: 0.37186; } 95% { opacity: 0.24475; } 100% { opacity: 0.37221; }
+        }
+        .scanlines {
+            top: 0; left: 0; height: 100%; width: 100%;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0) 50%, rgba(0,0,0,.2) 70%, rgba(0,0,0,.6));
+            background-size: 100% .3rem;
+            position: fixed; 
+            pointer-events: none;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+
+<div class="tv">
+    <div id="term"></div>
+    <div class="flicker"></div>
+    <div class="scanlines"></div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    var tv = document.querySelector('.tv');
+    var term = document.getElementById('term');
+    var inputBuffer = [];
+    var screenContent = "";
+    var keyboardInputLine = "";
+    var debugState = {};
+
+    window.addEventListener('keydown', function(e) {
+        if (e.key.length === 1) {
+            keyboardInputLine += e.key;
+            window.Z80System.renderTerminal();
+        } else if (e.key === 'Backspace') {
+            if (keyboardInputLine.length > 0) {
+                keyboardInputLine = keyboardInputLine.slice(0, -1);
+                window.Z80System.renderTerminal();
+            }
+        } else if (e.key === 'Enter') {
+            for (let i = 0; i < keyboardInputLine.length; i++) {
+                inputBuffer.push(keyboardInputLine.charCodeAt(i));
+            }
+            inputBuffer.push(10); 
+            keyboardInputLine = "";
+            window.Z80System.renderTerminal();
+        }
+    });
+
+    window.Z80System = {
+        writePort: function(port, value) {
+            switch(port & 0xFF) {
+                case 0x00:
+                    screenContent += String.fromCharCode(value);
+                    this.renderTerminal();
+                    break;
+                case 0x01:
+                    if (value === 12) this.clear();
+                    break;
+                case 0x0F:
+                    if (tv) tv.classList.add('collapse');
+                    break;
+            }
+        },
+        readPort: function(port) {
+            switch(port & 0xFF) {
+                case 0x00: return inputBuffer.length > 0 ? inputBuffer.shift() : 0;
+                case 0x01: return inputBuffer.length;
+                default: return 0;
+            }
+        },
+        clear: function() {
+            screenContent = "";
+            this.renderTerminal();
+        },
+        renderTerminal: function() {
+            term.innerHTML = screenContent + keyboardInputLine + '<span class="cursor"> </span>';
+            term.scrollTop = term.scrollHeight;
+        },
+        updateDebugUI: function(cpu) {
+            let state = cpu.getState();
+            debugState = {
+                PC: '0x' + state.pc.toString(16).toUpperCase().padStart(4, '0'),
+                SP: '0x' + state.sp.toString(16).toUpperCase().padStart(4, '0'),
+                A:  '0x' + state.a.toString(16).toUpperCase().padStart(2, '0'),
+                B:  '0x' + state.b.toString(16).toUpperCase().padStart(2, '0'),
+                HL: '0x' + ((state.h << 8) | state.l).toString(16).toUpperCase().padStart(4, '0'),
+                DE: '0x' + ((state.d << 8) | state.e).toString(16).toUpperCase().padStart(4, '0'),
+                ZeroFlag: (state.f & 0x40) ? 1 : 0,
+                BufferLength: inputBuffer.length
+            };
+        },
+        getDebugState: function() {
+            return debugState;
+        }
+    };
+
+    // 1. Initialize Memory (64KB)
+    const ram = new Uint8Array(65536);
+
+    // 2. Instantiate Z80 CPU using the memory and I/O interface hooks
+    const cpu = new Z80({
+        mem_read: function(addr) {
+            return ram[addr & 0xFFFF];
+        },
+        mem_write: function(addr, val) {
+            ram[addr & 0xFFFF] = val & 0xFF;
+        },
+        io_read: function(port) {
+            return window.Z80System.readPort(port);
+        },
+        io_write: function(port, val) {
+            window.Z80System.writePort(port, val);
+        }
+    });
+
+    // Intel HEX Loader function
+    function loadHexToMemory(hexText, memoryArray) {
+        const lines = hexText.split(/\r?\n/);
+        for (let line of lines) {
+            line = line.trim();
+            if (!line || line[0] !== ':') continue;
+            let byteCount = parseInt(line.substr(1, 2), 16);
+            let address = parseInt(line.substr(3, 4), 16);
+            let recordType = parseInt(line.substr(7, 2), 16);
+            if (recordType === 0x00) {
+                for (let i = 0; i < byteCount; i++) {
+                    let dataByte = parseInt(line.substr(9 + (i * 2), 2), 16);
+                    memoryArray[address + i] = dataByte;
+                }
+            } else if (recordType === 0x01) {
+                break;
+            }
+        }
+    }
+
+    window.Z80System.renderTerminal();
+
+    // Intel HEX Binary Data
+    const myHexData = `:100000003E0CD301216500CD4E00110080DB01FEC6
+:1000100000CA0D00DB00D300FE0ACA2700FE0DCA8D
+:1000200027001213C30D003E001221008011700042
+:10003000CD5800CA3D003E0AD300C304003E0AD397
+:1000400000217500CD4E003E0AD300C304007EFEA1
+:1000500000C8D30023C34E007E471AB8C0FE00C856
+:100060002313C35800526574726F66696F3E200097
+:0B00700068656C700048656C6C6F00E8
+:00000001FF`;
+
+    loadHexToMemory(myHexData, ram);
+    cpu.reset();
+
+    console.log("%cRetrofio OS Initialized (Powered by Z80.js)", "color: #00ff66; font-size: 14px; font-weight: bold;");
+    console.log("Run 'Z80System.getDebugState()' in this F12 console anytime to check registers.");
+
+    // Clock Execution Loop (Runs 500 T-states per frame)
+    function runSystemLoop() {
+        if (!cpu.halted) {
+            cpu.run_instruction();
+            window.Z80System.updateDebugUI(cpu);
+            setTimeout(runSystemLoop, 1);
+        }
+    }
+    runSystemLoop();
+});
+</script>
+
+</body>
+</html>
