@@ -1,0 +1,155 @@
+; =====================================================================
+; Upgraded Z80 CLI with Underflow & Overflow Protection
+; Max Input: 64 Bytes (63 Characters + 1 Null Terminator)
+; =====================================================================
+
+        ORG 0000h               
+
+MAX_BYTES EQU 63                ; Max characters allowed (leaves 1 byte for null)
+        LD A, 0Ch               ; Clear screen
+        OUT (01h), A   
+        LD HL, MSG_BOOT
+        CALL PRINT_STR 
+newpmt: LD HL, MSG_PROMPT       ; Print "Retrofio> "
+        CALL PRINT_STR          
+
+MAIN_LOOP:
+        LD DE, 8000h            ; DE = Buffer pointer
+        LD B, 0                 ; B = Character counter (starts at 0)
+
+INPUT_LOOP:
+        IN A, (01h)             ; Poll status port
+        CP 00h                  
+        JP Z, INPUT_LOOP        
+
+        IN A, (00h)             ; Read character from UART
+
+        ; --- Handle Backspace (Underflow Protection) ---
+        CP 08h                  ; Check for BS (Ctrl+H)
+        JP Z, HANDLE_BS
+        CP 7Fh                  ; Check for DEL (modern backspace)
+        JP Z, HANDLE_BS
+
+        ; --- Handle Enter Key ---
+        CP 0Ah                  ; Check for LF
+        JP Z, LINE_END          
+        CP 0Dh                  ; Check for CR
+        JP Z, LINE_END          
+
+        ; --- Handle Character Input & Overflow Protection ---
+        LD C, A                 ; Save input character in C
+        LD A, B                 ; Load current count
+        CP MAX_BYTES            ; Is buffer full (63 chars)?
+        JP NC, INPUT_LOOP       ; If full, ignore character and loop back
+
+        LD A, C                 ; Restore character
+        OUT (00h), A            ; Echo character to screen
+        LD (DE), A              ; Store in buffer
+        INC DE                  ; Advance pointer
+        INC B                   ; Increment counter
+        JP INPUT_LOOP           
+
+HANDLE_BS:
+        LD A, B                 ; Check current character count
+        CP 0                    ; Is the buffer empty?
+        JP Z, INPUT_LOOP        ; Yes -> Prevent underflow (ignore backspace)
+
+        ; Update internal state
+        DEC DE                  ; Move buffer pointer back
+        DEC B                   ; Decrement character counter
+
+        ; Update terminal visual display (Erase character on screen)
+        LD A, 08h               ; Move cursor back
+        OUT (00h), A
+        LD A, 20h               ; Print a space over the old character
+        OUT (00h), A
+        LD A, 08h               ; Move cursor back again
+        OUT (00h), A
+        JP INPUT_LOOP           
+
+LINE_END:
+        LD A, 00h               
+        LD (DE), A              ; Null-terminate the string
+        
+        LD HL, 8000h            ; HL = Input string
+        LD DE, STR_HELP         ; DE = "help"
+        CALL STR_CMP            
+        JP Z, DO_HELP           
+        LD DE, STR_INFO         ; DE = "help"
+        CALL STR_CMP            
+        JP Z, DO_INFO 
+        LD A, 0Ah               ; No match -> Newline
+        OUT (00h), A            
+        JP newpmt                
+
+DO_HELP:
+        LD A, 0Ah               
+        OUT (00h), A            
+        LD HL, MSG_HELP      
+        CALL PRINT_STR          
+        LD A, 0Ah               
+        OUT (00h), A            
+        JP newpmt                
+DO_INFO:
+        LD A, 0Ah               
+        OUT (00h), A            
+        LD HL, MSG_INFO      
+        CALL PRINT_STR          
+        LD A, 0Ah               
+        OUT (00h), A            
+        JP newpmt    
+; =====================================================================
+; Subroutines & Data Section (Unchanged)
+; =====================================================================
+PRINT_STR:
+        LD A, (HL)              
+        CP 00h                  
+        RET Z                   
+        OUT (00h), A            
+        INC HL                  
+        JP PRINT_STR            
+
+STR_CMP:
+        LD A, (HL)              
+        LD B, A                 
+        LD A, (DE)              
+        CP B                    
+        RET NZ                  
+        CP 00h                  
+        RET Z                   
+        INC HL                  
+        INC DE                  
+        JP STR_CMP              
+MSG_BOOT:   DB "Hello Welcome to Retrofio OS!", 13, 10
+            DB "Use help command to explore more :D" , 13, 10, 00h
+
+MSG_PROMPT: DB "Retrofio> ", 00h
+STR_HELP:   DB "help", 00h
+MSG_HELP:   DB "Command List:", 13, 10
+            DB "info - print out info about Retrofio" , 13, 10, 00h
+STR_INFO:   DB "info", 00h
+MSG_INFO:
+    DB "Welcome to Retrofio!", 13, 10
+    DB "Nowadays ppls are already spoiled by advanced powerful mcus like esp32 and PI-Pico.", 13, 10
+    DB "And ppl think old stuffs like assembly programming and machine codes are hard to learn and only top pro engineers can master them.", 13, 10
+    DB "In this ysws, we will focus on this amazing engineering area that no previous hackclub events have covered.", 13, 10, 13, 10
+    DB "You Ship:", 13, 10
+    DB "Any project related to RETRO!!!", 13, 10
+    DB "for Hardwares:", 13, 10
+    DB "-a development board made with old CPU <a target='_blank' href='https://www.youtube.com/watch?v=n_eEDAQWMdY'>Zeal80</a>", 13, 10
+    DB "-a whole modularized retro comptuer <a target='_blank' href='http://rc2014.co.uk'>RC2014</a>", 13, 10
+    DB "-a extension board of retro computer (like even a flash cart of gameboy counts!) <a target='_blank' href='https://www.reddit.com/r/Gameboy/comments/1rpzvio/home_made_flash_cart_official_cart_rom_chip/'>Gameboy Flash Cartridge</a>", 13, 10
+    DB "for Softwares:", 13, 10
+    DB "-an Emulator like a NES emulator <a target='_blank' href='https://www.youtube.com/watch?v=F8kx56OZQhg'>NES Emulator</a>", 13, 10
+    DB "-a software programmed in assembly <a target='_blank' href='https://www.youtube.com/watch?v=OG91c7xsNMc'>Notepad in Assembly</a>", 13, 10
+    DB "-a romhack for Pokemon Gen 1?", 13, 10, 13, 10
+    DB "We Ship:", 13, 10
+    DB "ur Project Grant , Small Dev boards(designed by us) for u to test programs etc.", 13, 10
+    DB "and most importantly:", 13, 10
+    DB "RETRO GRANTS!!!!", 13, 10
+    DB "like u can buy a Gameboy,a Retro-Computer so that you can use ur flash cart or extension board on!", 13, 10, 13, 10
+    DB "Planning,Designing prizes and open for Co-Orgs right now!", 13, 10
+    DB "RSVP Here:<a target='_blank' href='https://rsvp.hackclub.community/retrofio'>RSVP</a>", 13, 10
+    DB "<a target='_blank' href='https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709'>Slack:#Retrofio</a>", 13, 10, 00h
+
+        END
