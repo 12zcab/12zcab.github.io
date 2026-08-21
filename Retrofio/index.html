@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Retrofio Terminal OS</title>
-    <!-- Load Z80.js from CDN -->
-    <script src="https://cdn.jsdelivr.net/gh/mamedev/z80.js/z80.js"></script>
+    <!-- Load local z80.js file -->
+    <script src="./z80.js"></script>
     <style>
         body {
             margin: 0;
@@ -143,15 +143,27 @@ document.addEventListener("DOMContentLoaded", function() {
             term.scrollTop = term.scrollHeight;
         },
         updateDebugUI: function(cpu) {
-            let state = cpu.getState();
+            let pc = 0, sp = 0, a = 0, b = 0, hl = 0, de = 0, zf = 0;
+
+            if (typeof cpu.getState === 'function') {
+                let state = cpu.getState();
+                pc = state.pc; sp = state.sp; a = state.a; b = state.b;
+                hl = (state.h << 8) | state.l;
+                de = (state.d << 8) | state.e;
+                zf = (state.f & 0x40) ? 1 : 0;
+            } else {
+                pc = cpu.pc || 0; sp = cpu.sp || 0; a = cpu.a || 0; b = cpu.b || 0;
+                hl = cpu.hl || 0; de = cpu.de || 0; zf = cpu.f ? (cpu.f & 0x40 ? 1 : 0) : 0;
+            }
+
             debugState = {
-                PC: '0x' + state.pc.toString(16).toUpperCase().padStart(4, '0'),
-                SP: '0x' + state.sp.toString(16).toUpperCase().padStart(4, '0'),
-                A:  '0x' + state.a.toString(16).toUpperCase().padStart(2, '0'),
-                B:  '0x' + state.b.toString(16).toUpperCase().padStart(2, '0'),
-                HL: '0x' + ((state.h << 8) | state.l).toString(16).toUpperCase().padStart(4, '0'),
-                DE: '0x' + ((state.d << 8) | state.e).toString(16).toUpperCase().padStart(4, '0'),
-                ZeroFlag: (state.f & 0x40) ? 1 : 0,
+                PC: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'),
+                SP: '0x' + sp.toString(16).toUpperCase().padStart(4, '0'),
+                A:  '0x' + a.toString(16).toUpperCase().padStart(2, '0'),
+                B:  '0x' + b.toString(16).toUpperCase().padStart(2, '0'),
+                HL: '0x' + hl.toString(16).toUpperCase().padStart(4, '0'),
+                DE: '0x' + de.toString(16).toUpperCase().padStart(4, '0'),
+                ZeroFlag: zf,
                 BufferLength: inputBuffer.length
             };
         },
@@ -160,10 +172,10 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     };
 
-    // 1. Initialize Memory (64KB)
+    // Initialize 64KB RAM
     const ram = new Uint8Array(65536);
 
-    // 2. Instantiate Z80 CPU using the memory and I/O interface hooks
+    // Initialize CPU via memory and I/O callbacks
     const cpu = new Z80({
         mem_read: function(addr) {
             return ram[addr & 0xFFFF];
@@ -179,7 +191,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     });
 
-    // Intel HEX Loader function
     function loadHexToMemory(hexText, memoryArray) {
         const lines = hexText.split(/\r?\n/);
         for (let line of lines) {
@@ -201,7 +212,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
     window.Z80System.renderTerminal();
 
-    // Intel HEX Binary Data
     const myHexData = `:100000003E0CD301216500CD4E00110080DB01FEC6
 :1000100000CA0D00DB00D300FE0ACA2700FE0DCA8D
 :1000200027001213C30D003E001221008011700042
@@ -213,15 +223,18 @@ document.addEventListener("DOMContentLoaded", function() {
 :00000001FF`;
 
     loadHexToMemory(myHexData, ram);
-    cpu.reset();
 
-    console.log("%cRetrofio OS Initialized (Powered by Z80.js)", "color: #00ff66; font-size: 14px; font-weight: bold;");
-    console.log("Run 'Z80System.getDebugState()' in this F12 console anytime to check registers.");
+    if (typeof cpu.reset === 'function') cpu.reset();
 
-    // Clock Execution Loop (Runs 500 T-states per frame)
+    console.log("%cRetrofio OS Initialized (Powered by local z80.js)", "color: #00ff66; font-size: 14px; font-weight: bold;");
+
     function runSystemLoop() {
         if (!cpu.halted) {
-            cpu.run_instruction();
+            if (typeof cpu.run_instruction === 'function') {
+                cpu.run_instruction();
+            } else if (typeof cpu.step === 'function') {
+                cpu.step();
+            }
             window.Z80System.updateDebugUI(cpu);
             setTimeout(runSystemLoop, 1);
         }
