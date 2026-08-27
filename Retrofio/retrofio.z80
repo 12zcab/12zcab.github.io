@@ -75,12 +75,15 @@ LINE_END:
         LD DE, STR_HELP         ; DE = "help"
         CALL STR_CMP            
         JP Z, DO_HELP           
-        LD DE, STR_INFO         ; DE = "help"
+        LD DE, STR_INFO         ; DE = "info"
         CALL STR_CMP            
         JP Z, DO_INFO 
+        LD DE, STR_GUI          ; DE = "gui"
+        CALL STR_CMP
+        JP Z, DO_GUI
         LD A, 0Ah               ; No match -> Newline
         OUT (00h), A            
-        JP newpmt                
+        JP newpmt               
 
 DO_HELP:
         LD A, 0Ah               
@@ -89,7 +92,7 @@ DO_HELP:
         CALL PRINT_STR          
         LD A, 0Ah               
         OUT (00h), A            
-        JP newpmt                
+        JP newpmt               
 DO_INFO:
         LD A, 0Ah               
         OUT (00h), A            
@@ -97,7 +100,15 @@ DO_INFO:
         CALL PRINT_STR          
         LD A, 0Ah               
         OUT (00h), A            
-        JP newpmt    
+        JP newpmt   
+DO_GUI:
+        LD A, 0Ah
+        OUT (00h), A
+        LD HL, MSG_GUI
+        CALL PRINT_STR
+        LD A, 0Ah
+        OUT (00h), A
+        JP newpmt
 ; =====================================================================
 ; Subroutines & Data Section (Unchanged)
 ; =====================================================================
@@ -120,13 +131,15 @@ STR_CMP:
         INC HL                  
         INC DE                  
         JP STR_CMP              
+
 MSG_BOOT:   DB "Hello Welcome to Retrofio OS!", 13, 10
-            DB "Use help command to explore more :D" , 13, 10, 00h
+            DB "Use help command to explore more :D", 13, 10
+            DB "PRESS <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('gui')", 34, ">HERE</a> for GUI (Mobile Ver) :D", 13, 10, 00h
 
 MSG_PROMPT: DB "Retrofio> ", 00h
 STR_HELP:   DB "help", 00h
 MSG_HELP:   DB "Command List:", 13, 10
-            DB "info - print out info about Retrofio" , 13, 10, 00h
+            DB "info - print out info about Retrofio", 13, 10, 00h
 STR_INFO:   DB "info", 00h
 MSG_INFO:
     DB "Welcome to Retrofio!", 13, 10
@@ -136,20 +149,29 @@ MSG_INFO:
     DB "You Ship:", 13, 10
     DB "Any project related to RETRO!!!", 13, 10
     DB "for Hardwares:", 13, 10
-    DB "-a development board made with old CPU <a target='_blank' href='https://www.youtube.com/watch?v=n_eEDAQWMdY'>Zeal80</a>", 13, 10
-    DB "-a whole modularized retro comptuer <a target='_blank' href='http://rc2014.co.uk'>RC2014</a>", 13, 10
-    DB "-a extension board of retro computer (like even a flash cart of gameboy counts!) <a target='_blank' href='https://www.reddit.com/r/Gameboy/comments/1rpzvio/home_made_flash_cart_official_cart_rom_chip/'>Gameboy Flash Cartridge</a>", 13, 10
+    DB " -a development board made with old CPU <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=n_eEDAQWMdY", 34, ">Zeal80</a>", 13, 10
+    DB " -a whole modularized retro comptuer <a target=", 34, "_blank", 34, " href=", 34, "http://rc2014.co.uk", 34, ">RC2014</a>", 13, 10
+    DB " -a extension board of retro computer (like even a flash cart of gameboy counts!) <a target=", 34, "_blank", 34, " href=", 34, "https://www.reddit.com/r/Gameboy/comments/1rpzvio/home_made_flash_cart_official_cart_rom_chip/", 34, ">Gameboy Flash Cartridge</a>", 13, 10
     DB "for Softwares:", 13, 10
-    DB "-an Emulator like a NES emulator <a target='_blank' href='https://www.youtube.com/watch?v=F8kx56OZQhg'>NES Emulator</a>", 13, 10
-    DB "-a software programmed in assembly <a target='_blank' href='https://www.youtube.com/watch?v=OG91c7xsNMc'>Notepad in Assembly</a>", 13, 10
-    DB "-a romhack for Pokemon Gen 1?", 13, 10, 13, 10
+    DB " -an Emulator like a NES emulator <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=F8kx56OZQhg", 34, ">NES Emulator</a>", 13, 10
+    DB " -a software programmed in assembly <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=OG91c7xsNMc", 34, ">Notepad in Assembly</a>", 13, 10
+    DB " -a romhack for Pokemon Gen 1?", 13, 10, 13, 10
     DB "We Ship:", 13, 10
     DB "ur Project Grant , Small Dev boards(designed by us) for u to test programs etc.", 13, 10
     DB "and most importantly:", 13, 10
     DB "RETRO GRANTS!!!!", 13, 10
     DB "like u can buy a Gameboy,a Retro-Computer so that you can use ur flash cart or extension board on!", 13, 10, 13, 10
     DB "Planning,Designing prizes and open for Co-Orgs right now!", 13, 10
-    DB "RSVP Here:<a target='_blank' href='https://rsvp.hackclub.community/retrofio'>RSVP</a>", 13, 10
-    DB "<a target='_blank' href='https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709'>Slack:#Retrofio</a>", 13, 10, 00h
+    DB "RSVP Here:<a target=", 34, "_blank", 34, " href=", 34, "https://rsvp.hackclub.community/retrofio", 34, ">RSVP</a>", 13, 10
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709", 34, ">Slack:#Retrofio</a>", 13, 10, 00h
+    
+STR_GUI:   DB "gui", 00h
+MSG_GUI:
+    DB "+-------------------------------------+", 13, 10
+    DB "|      RETROFIO TOUCH COMMANDS        |", 13, 10
+    DB "+-------------------------------------+", 13, 10
+    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('help')", 34, ">[ HELP ]</a>   ", 13, 10
+    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('info')", 34, ">[ INFO ]</a>   ", 13, 10
+    DB "+-------------------------------------+", 13, 10, 00h
 
         END

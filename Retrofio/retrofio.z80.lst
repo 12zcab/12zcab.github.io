@@ -1,0 +1,233 @@
+0000                             ; =====================================================================
+0000                             ; Upgraded Z80 CLI with Underflow & Overflow Protection
+0000                             ; Max Input: 64 Bytes (63 Characters + 1 Null Terminator)
+0000                             ; =====================================================================
+0000                             ; 
+0000                          .ORG   0000h   
+0000                             ; 
+0000                MAX_BYTES:   EQU   63   ; Max characters allowed (leaves 1 byte for null)
+0000   3E 0C                  LD   A,0Ch   ; Clear screen
+0002   D3 01                  OUT   (01h),A   
+0004   21 CB 00               LD   HL,MSG_BOOT   
+0007   CD B4 00               CALL   PRINT_STR   
+000A   21 8B 01     NEWPMT:   LD   HL,MSG_PROMPT   ; Print "Retrofio> "
+000D   CD B4 00               CALL   PRINT_STR   
+0010                             ; 
+0010                MAIN_LOOP:      
+0010   11 00 80               LD   DE,8000h   ; DE = Buffer pointer
+0013   06 00                  LD   B,0   ; B = Character counter (starts at 0)
+0015                             ; 
+0015                INPUT_LOOP:      
+0015   DB 01                  IN   A,(01h)   ; Poll status port
+0017   FE 00                  CP   00h   
+0019   CA 15 00               JP   Z,INPUT_LOOP   
+001C                             ; 
+001C   DB 00                  IN   A,(00h)   ; Read character from UART
+001E                             ; 
+001E                             ; --- Handle Backspace (Underflow Protection) ---
+001E   FE 08                  CP   08h   ; Check for BS (Ctrl+H)
+0020   CA 42 00               JP   Z,HANDLE_BS   
+0023   FE 7F                  CP   7Fh   ; Check for DEL (modern backspace)
+0025   CA 42 00               JP   Z,HANDLE_BS   
+0028                             ; 
+0028                             ; --- Handle Enter Key ---
+0028   FE 0A                  CP   0Ah   ; Check for LF
+002A   CA 59 00               JP   Z,LINE_END   
+002D   FE 0D                  CP   0Dh   ; Check for CR
+002F   CA 59 00               JP   Z,LINE_END   
+0032                             ; 
+0032                             ; --- Handle Character Input & Overflow Protection ---
+0032   4F                     LD   C,A   ; Save input character in C
+0033   78                     LD   A,B   ; Load current count
+0034   FE 3F                  CP   MAX_BYTES   ; Is buffer full (63 chars)?
+0036   D2 15 00               JP   NC,INPUT_LOOP   ; If full, ignore character and loop back
+0039                             ; 
+0039   79                     LD   A,C   ; Restore character
+003A   D3 00                  OUT   (00h),A   ; Echo character to screen
+003C   12                     LD   (DE),A   ; Store in buffer
+003D   13                     INC   DE   ; Advance pointer
+003E   04                     INC   B   ; Increment counter
+003F   C3 15 00               JP   INPUT_LOOP   
+0042                             ; 
+0042                HANDLE_BS:      
+0042   78                     LD   A,B   ; Check current character count
+0043   FE 00                  CP   0   ; Is the buffer empty?
+0045   CA 15 00               JP   Z,INPUT_LOOP   ; Yes -> Prevent underflow (ignore backspace)
+0048                             ; 
+0048                             ; Update internal state
+0048   1B                     DEC   DE   ; Move buffer pointer back
+0049   05                     DEC   B   ; Decrement character counter
+004A                             ; 
+004A                             ; Update terminal visual display (Erase character on screen)
+004A   3E 08                  LD   A,08h   ; Move cursor back
+004C   D3 00                  OUT   (00h),A   
+004E   3E 20                  LD   A,20h   ; Print a space over the old character
+0050   D3 00                  OUT   (00h),A   
+0052   3E 08                  LD   A,08h   ; Move cursor back again
+0054   D3 00                  OUT   (00h),A   
+0056   C3 15 00               JP   INPUT_LOOP   
+0059                             ; 
+0059                LINE_END:      
+0059   3E 00                  LD   A,00h   
+005B   12                     LD   (DE),A   ; Null-terminate the string
+005C                             ; 
+005C   21 00 80               LD   HL,8000h   ; HL = Input string
+005F   11 96 01               LD   DE,STR_HELP   ; DE = "help"
+0062   CD BE 00               CALL   STR_CMP   
+0065   CA 81 00               JP   Z,DO_HELP   
+0068   11 D1 01               LD   DE,STR_INFO   ; DE = "info"
+006B   CD BE 00               CALL   STR_CMP   
+006E   CA 92 00               JP   Z,DO_INFO   
+0071   11 4E 08               LD   DE,STR_GUI   ; DE = "gui"
+0074   CD BE 00               CALL   STR_CMP   
+0077   CA A3 00               JP   Z,DO_GUI   
+007A   3E 0A                  LD   A,0Ah   ; No match -> Newline
+007C   D3 00                  OUT   (00h),A   
+007E   C3 0A 00               JP   newpmt   
+0081                             ; 
+0081                DO_HELP:      
+0081   3E 0A                  LD   A,0Ah   
+0083   D3 00                  OUT   (00h),A   
+0085   21 9B 01               LD   HL,MSG_HELP   
+0088   CD B4 00               CALL   PRINT_STR   
+008B   3E 0A                  LD   A,0Ah   
+008D   D3 00                  OUT   (00h),A   
+008F   C3 0A 00               JP   newpmt   
+0092                DO_INFO:      
+0092   3E 0A                  LD   A,0Ah   
+0094   D3 00                  OUT   (00h),A   
+0096   21 D6 01               LD   HL,MSG_INFO   
+0099   CD B4 00               CALL   PRINT_STR   
+009C   3E 0A                  LD   A,0Ah   
+009E   D3 00                  OUT   (00h),A   
+00A0   C3 0A 00               JP   newpmt   
+00A3                DO_GUI:      
+00A3   3E 0A                  LD   A,0Ah   
+00A5   D3 00                  OUT   (00h),A   
+00A7   21 52 08               LD   HL,MSG_GUI   
+00AA   CD B4 00               CALL   PRINT_STR   
+00AD   3E 0A                  LD   A,0Ah   
+00AF   D3 00                  OUT   (00h),A   
+00B1   C3 0A 00               JP   newpmt   
+00B4                             ; =====================================================================
+00B4                             ; Subroutines & Data Section (Unchanged)
+00B4                             ; =====================================================================
+00B4                PRINT_STR:      
+00B4   7E                     LD   A,(HL)   
+00B5   FE 00                  CP   00h   
+00B7   C8                     RET   Z   
+00B8   D3 00                  OUT   (00h),A   
+00BA   23                     INC   HL   
+00BB   C3 B4 00               JP   PRINT_STR   
+00BE                             ; 
+00BE                STR_CMP:      
+00BE   7E                     LD   A,(HL)   
+00BF   47                     LD   B,A   
+00C0   1A                     LD   A,(DE)   
+00C1   B8                     CP   B   
+00C2   C0                     RET   NZ   
+00C3   FE 00                  CP   00h   
+00C5   C8                     RET   Z   
+00C6   23                     INC   HL   
+00C7   13                     INC   DE   
+00C8   C3 BE 00               JP   STR_CMP   
+00CB                             ; 
+00CB   48 65 6C 6C 6F 20 57 65 6C 63 6F 6D 65 20 74 6F 20 52 65 74 72 6F 66 69 6F 20 4F 53 21 0D 0A MSG_BOOT:   DB   "Hello Welcome to Retrofio OS!",13,10   
+00EA   55 73 65 20 68 65 6C 70 20 63 6F 6D 6D 61 6E 64 20 74 6F 20 65 78 70 6C 6F 72 65 20 6D 6F 72 65 20 3A 44 0D 0A DB   "Use help command to explore more :D",13,10   
+010F   50 52 45 53 53 20 3C 61 20 73 74 79 6C 65 3D 22 63 6F 6C 6F 72 3A 23 30 66 30 3B 63 75 72 73 6F 72 3A 70 6F 69 6E 74 65 72 22 20 6F 6E 63 6C 69 63 6B 3D 22 77 69 6E 64 6F 77 2E 5A 38 30 53 79 73 74 65 6D 2E 74 79 70 65 43 6F 6D 6D 61 6E 64 28 27 67 75 69 27 29 22 3E 48 45 52 45 3C 2F 61 3E 20 66 6F 72 20 47 55 49 20 28 4D 6F 62 69 6C 65 20 56 65 72 29 20 3A 44 0D 0A 00 DB   "PRESS <a style=",34,"color:#0f0;cursor:pointer",34," onclick=",34,"window.Z80System.typeCommand('gui')",34,">HERE</a> for GUI (Mobile Ver) :D",13,10,00h   
+018B                             ; 
+018B   52 65 74 72 6F 66 69 6F 3E 20 00 MSG_PROMPT:   DB   "Retrofio> ",00h   
+0196   68 65 6C 70 00 STR_HELP:   DB   "help",00h   
+019B   43 6F 6D 6D 61 6E 64 20 4C 69 73 74 3A 0D 0A MSG_HELP:   DB   "Command List:",13,10   
+01AA   69 6E 66 6F 20 2D 20 70 72 69 6E 74 20 6F 75 74 20 69 6E 66 6F 20 61 62 6F 75 74 20 52 65 74 72 6F 66 69 6F 0D 0A 00 DB   "info - print out info about Retrofio",13,10,00h   
+01D1   69 6E 66 6F 00 STR_INFO:   DB   "info",00h   
+01D6                MSG_INFO:      
+01D6   57 65 6C 63 6F 6D 65 20 74 6F 20 52 65 74 72 6F 66 69 6F 21 0D 0A DB   "Welcome to Retrofio!",13,10   
+01EC   4E 6F 77 61 64 61 79 73 20 70 70 6C 73 20 61 72 65 20 61 6C 72 65 61 64 79 20 73 70 6F 69 6C 65 64 20 62 79 20 61 64 76 61 6E 63 65 64 20 70 6F 77 65 72 66 75 6C 20 6D 63 75 73 20 6C 69 6B 65 20 65 73 70 33 32 20 61 6E 64 20 50 49 2D 50 69 63 6F 2E 0D 0A DB   "Nowadays ppls are already spoiled by advanced powerful mcus like esp32 and PI-Pico.",13,10   
+0241   41 6E 64 20 70 70 6C 20 74 68 69 6E 6B 20 6F 6C 64 20 73 74 75 66 66 73 20 6C 69 6B 65 20 61 73 73 65 6D 62 6C 79 20 70 72 6F 67 72 61 6D 6D 69 6E 67 20 61 6E 64 20 6D 61 63 68 69 6E 65 20 63 6F 64 65 73 20 61 72 65 20 68 61 72 64 20 74 6F 20 6C 65 61 72 6E 20 61 6E 64 20 6F 6E 6C 79 20 74 6F 70 20 70 72 6F 20 65 6E 67 69 6E 65 65 72 73 20 63 61 6E 20 6D 61 73 74 65 72 20 74 68 65 6D 2E 0D 0A DB   "And ppl think old stuffs like assembly programming and machine codes are hard to learn and only top pro engineers can master them.",13,10   
+02C5   49 6E 20 74 68 69 73 20 79 73 77 73 2C 20 77 65 20 77 69 6C 6C 20 66 6F 63 75 73 20 6F 6E 20 74 68 69 73 20 61 6D 61 7A 69 6E 67 20 65 6E 67 69 6E 65 65 72 69 6E 67 20 61 72 65 61 20 74 68 61 74 20 6E 6F 20 70 72 65 76 69 6F 75 73 20 68 61 63 6B 63 6C 75 62 20 65 76 65 6E 74 73 20 68 61 76 65 20 63 6F 76 65 72 65 64 2E 0D 0A 0D 0A DB   "In this ysws, we will focus on this amazing engineering area that no previous hackclub events have covered.",13,10,13,10   
+0334   59 6F 75 20 53 68 69 70 3A 0D 0A DB   "You Ship:",13,10   
+033F   41 6E 79 20 70 72 6F 6A 65 63 74 20 72 65 6C 61 74 65 64 20 74 6F 20 52 45 54 52 4F 21 21 21 0D 0A DB   "Any project related to RETRO!!!",13,10   
+0360   66 6F 72 20 48 61 72 64 77 61 72 65 73 3A 0D 0A DB   "for Hardwares:",13,10   
+0370   20 2D 61 20 64 65 76 65 6C 6F 70 6D 65 6E 74 20 62 6F 61 72 64 20 6D 61 64 65 20 77 69 74 68 20 6F 6C 64 20 43 50 55 20 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 77 77 77 2E 79 6F 75 74 75 62 65 2E 63 6F 6D 2F 77 61 74 63 68 3F 76 3D 6E 5F 65 45 44 41 51 57 4D 64 59 22 3E 5A 65 61 6C 38 30 3C 2F 61 3E 0D 0A DB   " -a development board made with old CPU <a target=",34,"_blank",34," href=",34,"https://www.youtube.com/watch?v=n_eEDAQWMdY",34,">Zeal80</a>",13,10   
+03EA   20 2D 61 20 77 68 6F 6C 65 20 6D 6F 64 75 6C 61 72 69 7A 65 64 20 72 65 74 72 6F 20 63 6F 6D 70 74 75 65 72 20 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 3A 2F 2F 72 63 32 30 31 34 2E 63 6F 2E 75 6B 22 3E 52 43 32 30 31 34 3C 2F 61 3E 0D 0A DB   " -a whole modularized retro comptuer <a target=",34,"_blank",34," href=",34,"http://rc2014.co.uk",34,">RC2014</a>",13,10   
+0449   20 2D 61 20 65 78 74 65 6E 73 69 6F 6E 20 62 6F 61 72 64 20 6F 66 20 72 65 74 72 6F 20 63 6F 6D 70 75 74 65 72 20 28 6C 69 6B 65 20 65 76 65 6E 20 61 20 66 6C 61 73 68 20 63 61 72 74 20 6F 66 20 67 61 6D 65 62 6F 79 20 63 6F 75 6E 74 73 21 29 20 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 77 77 77 2E 72 65 64 64 69 74 2E 63 6F 6D 2F 72 2F 47 61 6D 65 62 6F 79 2F 63 6F 6D 6D 65 6E 74 73 2F 31 72 70 7A 76 69 6F 2F 68 6F 6D 65 5F 6D 61 64 65 5F 66 6C 61 73 68 5F 63 61 72 74 5F 6F 66 66 69 63 69 61 6C 5F 63 61 72 74 5F 72 6F 6D 5F 63 68 69 70 2F 22 3E 47 61 6D 65 62 6F 79 20 46 6C 61 73 68 20 43 61 72 74 72 69 64 67 65 3C 2F 61 3E 0D 0A DB   " -a extension board of retro computer (like even a flash cart of gameboy counts!) <a target=",34,"_blank",34," href=",34,"https://www.reddit.com/r/Gameboy/comments/1rpzvio/home_made_flash_cart_official_cart_rom_chip/",34,">Gameboy Flash Cartridge</a>",13,10   
+0531   66 6F 72 20 53 6F 66 74 77 61 72 65 73 3A 0D 0A DB   "for Softwares:",13,10   
+0541   20 2D 61 6E 20 45 6D 75 6C 61 74 6F 72 20 6C 69 6B 65 20 61 20 4E 45 53 20 65 6D 75 6C 61 74 6F 72 20 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 77 77 77 2E 79 6F 75 74 75 62 65 2E 63 6F 6D 2F 77 61 74 63 68 3F 76 3D 46 38 6B 78 35 36 4F 5A 51 68 67 22 3E 4E 45 53 20 45 6D 75 6C 61 74 6F 72 3C 2F 61 3E 0D 0A DB   " -an Emulator like a NES emulator <a target=",34,"_blank",34," href=",34,"https://www.youtube.com/watch?v=F8kx56OZQhg",34,">NES Emulator</a>",13,10   
+05BB   20 2D 61 20 73 6F 66 74 77 61 72 65 20 70 72 6F 67 72 61 6D 6D 65 64 20 69 6E 20 61 73 73 65 6D 62 6C 79 20 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 77 77 77 2E 79 6F 75 74 75 62 65 2E 63 6F 6D 2F 77 61 74 63 68 3F 76 3D 4F 47 39 31 63 37 78 73 4E 4D 63 22 3E 4E 6F 74 65 70 61 64 20 69 6E 20 41 73 73 65 6D 62 6C 79 3C 2F 61 3E 0D 0A DB   " -a software programmed in assembly <a target=",34,"_blank",34," href=",34,"https://www.youtube.com/watch?v=OG91c7xsNMc",34,">Notepad in Assembly</a>",13,10   
+063E   20 2D 61 20 72 6F 6D 68 61 63 6B 20 66 6F 72 20 50 6F 6B 65 6D 6F 6E 20 47 65 6E 20 31 3F 0D 0A 0D 0A DB   " -a romhack for Pokemon Gen 1?",13,10,13,10   
+0660   57 65 20 53 68 69 70 3A 0D 0A DB   "We Ship:",13,10   
+066A   75 72 20 50 72 6F 6A 65 63 74 20 47 72 61 6E 74 20 2C 20 53 6D 61 6C 6C 20 44 65 76 20 62 6F 61 72 64 73 28 64 65 73 69 67 6E 65 64 20 62 79 20 75 73 29 20 66 6F 72 20 75 20 74 6F 20 74 65 73 74 20 70 72 6F 67 72 61 6D 73 20 65 74 63 2E 0D 0A DB   "ur Project Grant , Small Dev boards(designed by us) for u to test programs etc.",13,10   
+06BB   61 6E 64 20 6D 6F 73 74 20 69 6D 70 6F 72 74 61 6E 74 6C 79 3A 0D 0A DB   "and most importantly:",13,10   
+06D2   52 45 54 52 4F 20 47 52 41 4E 54 53 21 21 21 21 0D 0A DB   "RETRO GRANTS!!!!",13,10   
+06E4   6C 69 6B 65 20 75 20 63 61 6E 20 62 75 79 20 61 20 47 61 6D 65 62 6F 79 2C 61 20 52 65 74 72 6F 2D 43 6F 6D 70 75 74 65 72 20 73 6F 20 74 68 61 74 20 79 6F 75 20 63 61 6E 20 75 73 65 20 75 72 20 66 6C 61 73 68 20 63 61 72 74 20 6F 72 20 65 78 74 65 6E 73 69 6F 6E 20 62 6F 61 72 64 20 6F 6E 21 0D 0A 0D 0A DB   "like u can buy a Gameboy,a Retro-Computer so that you can use ur flash cart or extension board on!",13,10,13,10   
+074A   50 6C 61 6E 6E 69 6E 67 2C 44 65 73 69 67 6E 69 6E 67 20 70 72 69 7A 65 73 20 61 6E 64 20 6F 70 65 6E 20 66 6F 72 20 43 6F 2D 4F 72 67 73 20 72 69 67 68 74 20 6E 6F 77 21 0D 0A DB   "Planning,Designing prizes and open for Co-Orgs right now!",13,10   
+0785   52 53 56 50 20 48 65 72 65 3A 3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 72 73 76 70 2E 68 61 63 6B 63 6C 75 62 2E 63 6F 6D 6D 75 6E 69 74 79 2F 72 65 74 72 6F 66 69 6F 22 3E 52 53 56 50 3C 2F 61 3E 0D 0A DB   "RSVP Here:<a target=",34,"_blank",34," href=",34,"https://rsvp.hackclub.community/retrofio",34,">RSVP</a>",13,10   
+07DC   3C 61 20 74 61 72 67 65 74 3D 22 5F 62 6C 61 6E 6B 22 20 68 72 65 66 3D 22 68 74 74 70 73 3A 2F 2F 68 61 63 6B 63 6C 75 62 2E 73 6C 61 63 6B 2E 63 6F 6D 2F 61 72 63 68 69 76 65 73 2F 43 30 42 50 5A 42 53 46 46 42 38 2F 70 31 37 38 36 36 33 35 33 39 38 35 36 32 37 30 39 22 3E 53 6C 61 63 6B 3A 23 52 65 74 72 6F 66 69 6F 3C 2F 61 3E 0D 0A 00 DB   "<a target=",34,"_blank",34," href=",34,"https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709",34,">Slack:#Retrofio</a>",13,10,00h   
+084E                             ; 
+084E   67 75 69 00  STR_GUI:   DB   "gui",00h   
+0852                MSG_GUI:      
+0852   2B 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2B 0D 0A DB   "+-------------------------------------+",13,10   
+087B   7C 20 20 20 20 20 20 52 45 54 52 4F 46 49 4F 20 54 4F 55 43 48 20 43 4F 4D 4D 41 4E 44 53 20 20 20 20 20 20 20 20 7C 0D 0A DB   "|      RETROFIO TOUCH COMMANDS        |",13,10   
+08A4   2B 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2B 0D 0A DB   "+-------------------------------------+",13,10   
+08CD   7C 20 3C 61 20 73 74 79 6C 65 3D 22 63 6F 6C 6F 72 3A 23 30 66 30 3B 63 75 72 73 6F 72 3A 70 6F 69 6E 74 65 72 22 20 6F 6E 63 6C 69 63 6B 3D 22 77 69 6E 64 6F 77 2E 5A 38 30 53 79 73 74 65 6D 2E 74 79 70 65 43 6F 6D 6D 61 6E 64 28 27 68 65 6C 70 27 29 22 3E 5B 20 48 45 4C 50 20 5D 3C 2F 61 3E 20 20 20 0D 0A DB   "| <a style=",34,"color:#0f0;cursor:pointer",34," onclick=",34,"window.Z80System.typeCommand('help')",34,">[ HELP ]</a>   ",13,10   
+0934   7C 20 3C 61 20 73 74 79 6C 65 3D 22 63 6F 6C 6F 72 3A 23 30 66 30 3B 63 75 72 73 6F 72 3A 70 6F 69 6E 74 65 72 22 20 6F 6E 63 6C 69 63 6B 3D 22 77 69 6E 64 6F 77 2E 5A 38 30 53 79 73 74 65 6D 2E 74 79 70 65 43 6F 6D 6D 61 6E 64 28 27 69 6E 66 6F 27 29 22 3E 5B 20 49 4E 46 4F 20 5D 3C 2F 61 3E 20 20 20 0D 0A DB   "| <a style=",34,"color:#0f0;cursor:pointer",34," onclick=",34,"window.Z80System.typeCommand('info')",34,">[ INFO ]</a>   ",13,10   
+099B   2B 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2D 2B 0D 0A 00 DB   "+-------------------------------------+",13,10,00h   
+09C5                             ; 
+09C5                          END      
+
+
+MAX_BYTES:          003F DEFINED AT LINE 8
+                    > USED AT LINE 42
+NEWPMT:             000A DEFINED AT LINE 13
+                    > USED AT LINE 86
+                    > USED AT LINE 95
+                    > USED AT LINE 103
+                    > USED AT LINE 111
+MAIN_LOOP:          0010 DEFINED AT LINE 16
+INPUT_LOOP:         0015 DEFINED AT LINE 20
+                    > USED AT LINE 23
+                    > USED AT LINE 43
+                    > USED AT LINE 50
+                    > USED AT LINE 55
+                    > USED AT LINE 68
+HANDLE_BS:          0042 DEFINED AT LINE 52
+                    > USED AT LINE 29
+                    > USED AT LINE 31
+LINE_END:           0059 DEFINED AT LINE 70
+                    > USED AT LINE 35
+                    > USED AT LINE 37
+DO_HELP:            0081 DEFINED AT LINE 88
+                    > USED AT LINE 77
+DO_INFO:            0092 DEFINED AT LINE 96
+                    > USED AT LINE 80
+DO_GUI:             00A3 DEFINED AT LINE 104
+                    > USED AT LINE 83
+PRINT_STR:          00B4 DEFINED AT LINE 115
+                    > USED AT LINE 12
+                    > USED AT LINE 14
+                    > USED AT LINE 92
+                    > USED AT LINE 100
+                    > USED AT LINE 108
+                    > USED AT LINE 121
+STR_CMP:            00BE DEFINED AT LINE 123
+                    > USED AT LINE 76
+                    > USED AT LINE 79
+                    > USED AT LINE 82
+                    > USED AT LINE 133
+MSG_BOOT:           00CB DEFINED AT LINE 135
+                    > USED AT LINE 11
+MSG_PROMPT:         018B DEFINED AT LINE 139
+                    > USED AT LINE 13
+STR_HELP:           0196 DEFINED AT LINE 140
+                    > USED AT LINE 75
+MSG_HELP:           019B DEFINED AT LINE 141
+                    > USED AT LINE 91
+STR_INFO:           01D1 DEFINED AT LINE 143
+                    > USED AT LINE 78
+MSG_INFO:           01D6 DEFINED AT LINE 144
+                    > USED AT LINE 99
+STR_GUI:            084E DEFINED AT LINE 168
+                    > USED AT LINE 81
+MSG_GUI:            0852 DEFINED AT LINE 169
+                    > USED AT LINE 107
