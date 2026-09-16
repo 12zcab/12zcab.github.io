@@ -132,7 +132,12 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB "Hello Welcome to Retrofio OS!", 13, 10
+MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
+            DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
+            DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
+            DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
+            DB '  \\/_/ /_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/   \\/_/     \\/_/   \\/_____/ ', 13, 10
+            DB "Hello Welcome to Retrofio OS!", 13, 10
             DB "Use help command to explore more :D", 13, 10
             DB "PRESS <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('gui')", 34, ">HERE</a> for GUI (Mobile Ver) :D", 13, 10, 00h
 
