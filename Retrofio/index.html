@@ -11,10 +11,10 @@
             background: black;
             overflow: hidden;
             display: flex;
+            justify-content: center;
             font-family: monospace;
             caret-color: transparent;
             user-select: none;
-            -webkit-user-select: none;
             cursor: default;
         }
         .tv {
@@ -22,15 +22,21 @@
             height: 100vh;
             position: relative;
             overflow: hidden;
+            display: flex;
+            justify-content: center;
         }
         #term {
             height: 100vh;
+            width: 80ch;
+            max-width: 80ch;
+            margin: 0 auto;
             color: #0c7b46;
             font-size: 16px;
             padding: 20px;
-            box-sizing: border-box;
-            white-space: pre-wrap;
-            word-wrap: break-word;
+            box-sizing: content-box;
+            white-space: pre;
+            word-wrap: normal;
+            overflow-x: hidden;
             overflow-y: auto;
             text-shadow: 0 0.2rem 1rem #0c7b46;
             line-height: 1.2em;
@@ -56,13 +62,7 @@
             animation: flicker 0.12s infinite;
         }
         @keyframes flicker {
-            0% { opacity: 0.552; } 5% { opacity: 0.48287; } 10% { opacity: 0.59134; }
-            15% { opacity: 0.79543; } 20% { opacity: 0.75134; } 25% { opacity: 0.1956; }
-            30% { opacity: 0.90687; } 35% { opacity: 0.122; } 40% { opacity: 0.62254; }
-            45% { opacity: 0.56977; } 50% { opacity: 0.9925; } 55% { opacity: 0.55487; }
-            60% { opacity: 0.16607; } 65% { opacity: 0.12353; } 70% { opacity: 0.2214; }
-            75% { opacity: 0.67908; } 80% { opacity: 0.97163; } 85% { opacity: 0.1275; }
-            90% { opacity: 0.37186; } 95% { opacity: 0.24475; } 100% { opacity: 0.37221; }
+            0% { opacity: 0.55; } 50% { opacity: 0.99; } 100% { opacity: 0.37; }
         }
         .scanlines {
             top: 0; left: 0; height: 100%; width: 100%;
@@ -70,7 +70,6 @@
             background-size: 100% .3rem;
             position: fixed; 
             pointer-events: none;
-            overflow: hidden;
         }
     </style>
 </head>
@@ -81,109 +80,122 @@
     <div class="flicker"></div>
     <div class="scanlines"></div>
 </div>
+
 <script>
 document.addEventListener("DOMContentLoaded", function() {
-    var tv = document.querySelector('.tv');
     var term = document.getElementById('term');
     var inputBuffer = [];
     var rawScreenBuffer = "";
-    var debugState = {};
+    var currentColumn = 0;
 
-    // Forward raw key codes straight to the Z80 input queue
+    // --- 24-BIT EXTENDED VIRTUAL MEMORY & I/O ADDRESS LATCHES ---
+    let addressLatch = 0;
+    let videoStreamBuffer = new Uint8Array(0);
+
+    // Load binary video stream into JS memory (1 byte = 8 horizontal pixels)
+    fetch('./bad_apple_raw.bin')
+        .then(response => response.arrayBuffer())
+        .then(buffer => {
+            videoStreamBuffer = new Uint8Array(buffer);
+            console.log("Loaded raw video stream:", videoStreamBuffer.length, "bytes");
+        })
+        .catch(err => console.error("Error loading binary stream:", err));
+
     window.addEventListener('keydown', function(e) {
         if (e.key.length === 1) {
             inputBuffer.push(e.key.charCodeAt(0));
         } else if (e.key === 'Backspace') {
-            inputBuffer.push(0x08); // ASCII BS
+            inputBuffer.push(0x08);
         } else if (e.key === 'Enter') {
-            inputBuffer.push(0x0A); // ASCII LF
-        } else if (e.key === 'Tab') {
-            e.preventDefault();
-            inputBuffer.push(0x09); // ASCII HT
+            inputBuffer.push(0x0A);
         }
     });
 
     window.Z80System = {
-        // Automatically injects a string into inputBuffer followed by Enter (0x0A)
         typeCommand: function(cmd) {
             for (var i = 0; i < cmd.length; i++) {
                 inputBuffer.push(cmd.charCodeAt(i));
             }
-            inputBuffer.push(0x0A); // ASCII LF (Enter)
+            inputBuffer.push(0x0A);
         },
         writePort: function(port, value) {
             switch(port & 0xFF) {
-                case 0x00: // Terminal Data Output
+                // --- UART OUTPUT ---
+                case 0x00:
                     this.processByte(value & 0xFF);
                     break;
-                case 0x01: // Command Control
+                case 0x01:
                     if (value === 12) this.clear();
                     break;
-                case 0x0F: // CRT Shutoff
-                    if (tv) tv.classList.add('collapse');
+
+                // --- 24-BIT ADDRESS LATCH PORTS ---
+                case 0x02: // Address Bits 0-7
+                    addressLatch = (addressLatch & 0xFFFF00) | (value & 0xFF);
+                    break;
+                case 0x03: // Address Bits 8-15
+                    addressLatch = (addressLatch & 0xFF00FF) | ((value & 0xFF) << 8);
+                    break;
+                case 0x04: // Address Bits 16-23
+                    addressLatch = (addressLatch & 0x00FFFF) | ((value & 0xFF) << 16);
                     break;
             }
         },
         readPort: function(port) {
             switch(port & 0xFF) {
-                case 0x00: return inputBuffer.length > 0 ? inputBuffer.shift() : 0;
-                case 0x01: return inputBuffer.length;
-                default: return 0;
+                // --- UART INPUT ---
+                case 0x00: 
+                    return inputBuffer.length > 0 ? inputBuffer.shift() : 0;
+                case 0x01: 
+                    return inputBuffer.length;
+
+                // --- VIDEO MEMORY FETCH RESPONSE PORT ---
+                case 0x05:
+                    if (addressLatch < videoStreamBuffer.length) {
+                        let dataByte = videoStreamBuffer[addressLatch];
+                        addressLatch++; // Auto-advance latch to speed up Z80 reading
+                        return dataByte;
+                    }
+                    return 0x00; // End of Stream
+
+                default: 
+                    return 0;
             }
         },
         processByte: function(byte) {
             switch(byte) {
-                case 0x08: // Backspace
+                case 0x08:
                     if (rawScreenBuffer.length > 0) {
                         rawScreenBuffer = rawScreenBuffer.slice(0, -1);
+                        if (currentColumn > 0) currentColumn--;
                     }
                     break;
-                case 0x0C: // Form Feed (Clear Screen)
+                case 0x0C:
                     rawScreenBuffer = "";
+                    currentColumn = 0;
                     break;
-                case 0x0D: // Carriage Return
-                    break; // Ignored when using standard pre-wrap white-space
+                case 0x0A:
+                    rawScreenBuffer += "\n";
+                    currentColumn = 0;
+                    break;
                 default:
+                    if (currentColumn >= 80) {
+                        rawScreenBuffer += "\n";
+                        currentColumn = 0;
+                    }
                     rawScreenBuffer += String.fromCharCode(byte);
+                    currentColumn++;
                     break;
             }
             this.renderTerminal();
         },
         clear: function() {
             rawScreenBuffer = "";
+            currentColumn = 0;
             this.renderTerminal();
         },
         renderTerminal: function() {
             term.innerHTML = rawScreenBuffer + '<span class="cursor"> </span>';
             term.scrollTop = term.scrollHeight;
-        },
-        updateDebugUI: function(cpu) {
-            let pc = 0, sp = 0, a = 0, b = 0, hl = 0, de = 0, zf = 0;
-
-            if (typeof cpu.getState === 'function') {
-                let state = cpu.getState();
-                pc = state.pc; sp = state.sp; a = state.a; b = state.b;
-                hl = (state.h << 8) | state.l;
-                de = (state.d << 8) | state.e;
-                zf = (state.f & 0x40) ? 1 : 0;
-            } else {
-                pc = cpu.pc || 0; sp = cpu.sp || 0; a = cpu.a || 0; b = cpu.b || 0;
-                hl = cpu.hl || 0; de = cpu.de || 0; zf = cpu.f ? (cpu.f & 0x40 ? 1 : 0) : 0;
-            }
-
-            debugState = {
-                PC: '0x' + pc.toString(16).toUpperCase().padStart(4, '0'),
-                SP: '0x' + sp.toString(16).toUpperCase().padStart(4, '0'),
-                A:  '0x' + a.toString(16).toUpperCase().padStart(2, '0'),
-                B:  '0x' + b.toString(16).toUpperCase().padStart(2, '0'),
-                HL: '0x' + hl.toString(16).toUpperCase().padStart(4, '0'),
-                DE: '0x' + de.toString(16).toUpperCase().padStart(4, '0'),
-                ZeroFlag: zf,
-                BufferLength: inputBuffer.length
-            };
-        },
-        getDebugState: function() {
-            return debugState;
         }
     };
 
@@ -228,27 +240,18 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
                 if (cpu.halted) break;
             }
-            window.Z80System.updateDebugUI(cpu);
             setTimeout(runSystemLoop, 0);
         }
     }
 
-    // Load the external hex file via Fetch API
     fetch('./retrofio.z80.hex')
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('Network response was not ok: ' + response.statusText);
-            }
-            return response.text();
-        })
+        .then(response => response.text())
         .then(hexText => {
             loadHexToMemory(hexText, ram);
             if (typeof cpu.reset === 'function') cpu.reset();
             runSystemLoop();
         })
-        .catch(error => {
-            console.error('Error loading hex file:', error);
-        });
+        .catch(error => console.error('Error loading hex file:', error));
 });
 </script>
 

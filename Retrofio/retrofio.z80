@@ -1,21 +1,24 @@
 ; =====================================================================
-; Upgraded Z80 CLI with Underflow & Overflow Protection
-; Max Input: 64 Bytes (63 Characters + 1 Null Terminator)
+; Upgraded Z80 CLI + Address-Mapped I/O Bad Apple Engine
+; Address Latches: Ports 02h (Low), 03h (Mid), 04h (High)
+; Data Response:  Port 05h (Read)
 ; =====================================================================
 
         ORG 0000h               
 
-MAX_BYTES EQU 63                ; Max characters allowed (leaves 1 byte for null)
+MAX_BYTES EQU 63                ; Max characters allowed
+
         LD A, 0Ch               ; Clear screen
-        OUT (01h), A   
+        OUT (01h), A    
         LD HL, MSG_BOOT
         CALL PRINT_STR 
+
 newpmt: LD HL, MSG_PROMPT       ; Print "Retrofio> "
         CALL PRINT_STR          
 
 MAIN_LOOP:
         LD DE, 8000h            ; DE = Buffer pointer
-        LD B, 0                 ; B = Character counter (starts at 0)
+        LD B, 0                 ; B = Character counter
 
 INPUT_LOOP:
         IN A, (01h)             ; Poll status port
@@ -24,64 +27,66 @@ INPUT_LOOP:
 
         IN A, (00h)             ; Read character from UART
 
-        ; --- Handle Backspace (Underflow Protection) ---
-        CP 08h                  ; Check for BS (Ctrl+H)
+        ; --- Handle Backspace ---
+        CP 08h                  
         JP Z, HANDLE_BS
-        CP 7Fh                  ; Check for DEL (modern backspace)
+        CP 7Fh                  
         JP Z, HANDLE_BS
 
         ; --- Handle Enter Key ---
-        CP 0Ah                  ; Check for LF
+        CP 0Ah                  
         JP Z, LINE_END          
-        CP 0Dh                  ; Check for CR
+        CP 0Dh                  
         JP Z, LINE_END          
 
-        ; --- Handle Character Input & Overflow Protection ---
-        LD C, A                 ; Save input character in C
-        LD A, B                 ; Load current count
-        CP MAX_BYTES            ; Is buffer full (63 chars)?
-        JP NC, INPUT_LOOP       ; If full, ignore character and loop back
+        ; --- Handle Character Input ---
+        LD C, A                 
+        LD A, B                 
+        CP MAX_BYTES            
+        JP NC, INPUT_LOOP       
 
-        LD A, C                 ; Restore character
-        OUT (00h), A            ; Echo character to screen
-        LD (DE), A              ; Store in buffer
-        INC DE                  ; Advance pointer
-        INC B                   ; Increment counter
+        LD A, C                 
+        OUT (00h), A            
+        LD (DE), A              
+        INC DE                  
+        INC B                   
         JP INPUT_LOOP           
 
 HANDLE_BS:
-        LD A, B                 ; Check current character count
-        CP 0                    ; Is the buffer empty?
-        JP Z, INPUT_LOOP        ; Yes -> Prevent underflow (ignore backspace)
+        LD A, B                 
+        CP 0                    
+        JP Z, INPUT_LOOP        
 
-        ; Update internal state
-        DEC DE                  ; Move buffer pointer back
-        DEC B                   ; Decrement character counter
+        DEC DE                  
+        DEC B                   
 
-        ; Update terminal visual display (Erase character on screen)
-        LD A, 08h               ; Move cursor back
+        LD A, 08h               
         OUT (00h), A
-        LD A, 20h               ; Print a space over the old character
+        LD A, 20h               
         OUT (00h), A
-        LD A, 08h               ; Move cursor back again
+        LD A, 08h               
         OUT (00h), A
         JP INPUT_LOOP           
 
 LINE_END:
         LD A, 00h               
-        LD (DE), A              ; Null-terminate the string
+        LD (DE), A              ; Null-terminate string
         
-        LD HL, 8000h            ; HL = Input string
-        LD DE, STR_HELP         ; DE = "help"
+        LD HL, 8000h            
+        LD DE, STR_HELP         
         CALL STR_CMP            
         JP Z, DO_HELP           
-        LD DE, STR_INFO         ; DE = "info"
+        LD DE, STR_INFO         
         CALL STR_CMP            
         JP Z, DO_INFO 
-        LD DE, STR_GUI          ; DE = "gui"
+        LD DE, STR_GUI          
         CALL STR_CMP
         JP Z, DO_GUI
-        LD A, 0Ah               ; No match -> Newline
+        LD DE, STR_APPLE        
+        CALL STR_CMP
+        JP Z, DO_APPLE
+
+        LD A, 0Ah               
         OUT (00h), A            
         JP newpmt               
 
@@ -93,6 +98,7 @@ DO_HELP:
         LD A, 0Ah               
         OUT (00h), A            
         JP newpmt               
+
 DO_INFO:
         LD A, 0Ah               
         OUT (00h), A            
@@ -101,6 +107,7 @@ DO_INFO:
         LD A, 0Ah               
         OUT (00h), A            
         JP newpmt   
+
 DO_GUI:
         LD A, 0Ah
         OUT (00h), A
@@ -109,8 +116,106 @@ DO_GUI:
         LD A, 0Ah
         OUT (00h), A
         JP newpmt
+
 ; =====================================================================
-; Subroutines & Data Section (Unchanged)
+; BAD APPLE COMMAND HANDLER (I/O ADDRESS-MAPPED)
+; =====================================================================
+DO_APPLE:
+        ; Reset internal 24-bit address counter to offset 0
+        XOR A
+        LD (STREAM_PTR_0), A
+        LD (STREAM_PTR_1), A
+        LD (STREAM_PTR_2), A
+
+FRAME_LOOP:
+        ; 1. Output 24-bit target address to HTML latches
+        LD A, (STREAM_PTR_0)
+        OUT (02h), A            ; Send Address Bits 0-7
+        LD A, (STREAM_PTR_1)
+        OUT (03h), A            ; Send Address Bits 8-15
+        LD A, (STREAM_PTR_2)
+        OUT (04h), A            ; Send Address Bits 16-23
+
+        ; 2. Fetch 96 bytes (32x24 pixels = 768 bits)
+        LD DE, 9000h            ; VRAM buffer
+        LD C, 96                ; 96 bytes per frame
+
+FETCH_FRAME_BYTES:
+        IN A, (05h)             ; Read response byte from HTML at address
+        
+        ; Unpack 8 raw pixel bits
+        LD B, 8
+UNPACK_BITS:
+        RLCA
+        JR C, BIT_WHITE
+
+BIT_BLACK:
+        PUSH AF
+        LD A, 20h               ; Space ' '
+        LD (DE), A
+        INC DE
+        POP AF
+        DJNZ UNPACK_BITS
+        JP BYTE_DONE
+
+BIT_WHITE:
+        PUSH AF
+        LD A, 23h               ; Hash '#'
+        LD (DE), A
+        INC DE
+        POP AF
+        DJNZ UNPACK_BITS
+
+BYTE_DONE:
+        DEC C
+        JR NZ, FETCH_FRAME_BYTES
+
+; --- ADVANCE 24-BIT STREAM POINTER (+96 BYTES) ---
+        LD HL, (STREAM_PTR_0)
+        LD DE, 96
+        ADD HL, DE
+        LD (STREAM_PTR_0), HL
+        JR NC, RENDER_FRAME
+        
+        ; Carry over to high byte (Bits 16-23)
+        LD A, (STREAM_PTR_2)
+        INC A
+        LD (STREAM_PTR_2), A
+
+; --- RENDER BUFFER TO SCREEN ---
+RENDER_FRAME:
+        LD A, 0Ch               ; Clear terminal
+        OUT (01h), A
+
+        LD IX, 9000h
+        LD B, 24                ; 24 rows
+ROW_LOOP:
+        PUSH BC
+        LD B, 32                ; 32 columns
+COL_LOOP:
+        LD A, (IX+0)
+        OUT (00h), A
+        INC IX
+        DJNZ COL_LOOP
+
+        LD A, 0Ah               ; Newline
+        OUT (00h), A
+
+        POP BC
+        DJNZ ROW_LOOP
+
+; --- FRAME DELAY LOOP ---
+        LD BC, 0600h
+DELAY:
+        DEC BC
+        LD A, B
+        OR C
+        JR NZ, DELAY
+
+        JP FRAME_LOOP
+
+; =====================================================================
+; Subroutines & Original System Data
 ; =====================================================================
 PRINT_STR:
         LD A, (HL)              
@@ -132,11 +237,11 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
-            DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
-            DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
-            DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
-            DB '  \\/_/ /_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/   \\/_/     \\/_/   \\/_____/ ', 13, 10
+MSG_BOOT:   DB ' ______      ______      ______   ______     ______      ______   __     ______    ', 13, 10
+            DB '/\  == \    /\  ___\    /\__  _\ /\  == \   /\  __ \    /\  ___\ /\ \   /\  __ \   ', 13, 10
+            DB '\ \  __<    \ \  __\    \/_/\ \/ \ \  __<   \ \ \/\ \   \ \  __\ \ \ \  \ \ \/\ \  ', 13, 10
+            DB ' \ \_\ \_\   \ \_____\     \ \_\  \ \_\ \_\  \ \_____\   \ \_\    \ \_\  \ \_____\ ', 13, 10
+            DB '  \/_/ /_/    \/_____/      \/_/   \/_/ /_/   \/_____/    \/_/     \/_/   \/_____/ ', 13, 10
             DB "Hello Welcome to Retrofio OS!", 13, 10
             DB "Use help command to explore more :D", 13, 10
             DB "PRESS <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('gui')", 34, ">HERE</a> for GUI (Mobile Ver) :D", 13, 10, 00h
@@ -144,39 +249,20 @@ MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   _
 MSG_PROMPT: DB "Retrofio> ", 00h
 STR_HELP:   DB "help", 00h
 MSG_HELP:   DB "Command List:", 13, 10
-            DB "info - print out info about Retrofio", 13, 10, 00h
+            DB "info  - print out info about Retrofio", 13, 10
+            DB "apple - play Bad Apple!! (I/O Fetch Engine)", 13, 10, 00h
+
 STR_INFO:   DB "info", 00h
-MSG_INFO:
-    DB "Welcome to Retrofio!", 13, 10
-    DB "Nowadays ppls are already spoiled by advanced powerful mcus like esp32 and PI-Pico.", 13, 10
-    DB "And ppl think old stuffs like assembly programming and machine codes are hard to learn and only top pro engineers can master them.", 13, 10
-    DB "In this ysws, we will focus on this amazing engineering area that no previous hackclub events have covered.", 13, 10, 13, 10
-    DB "You Ship:", 13, 10
-    DB "Any project related to RETRO!!!", 13, 10
-    DB "for Hardwares:", 13, 10
-    DB " -a development board made with old CPU <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=n_eEDAQWMdY", 34, ">Zeal80</a>", 13, 10
-    DB " -a whole modularized retro comptuer <a target=", 34, "_blank", 34, " href=", 34, "http://rc2014.co.uk", 34, ">RC2014</a>", 13, 10
-    DB " -a extension board of retro computer (like even a flash cart of gameboy counts!) <a target=", 34, "_blank", 34, " href=", 34, "https://www.reddit.com/r/Gameboy/comments/1rpzvio/home_made_flash_cart_official_cart_rom_chip/", 34, ">Gameboy Flash Cartridge</a>", 13, 10
-    DB "for Softwares:", 13, 10
-    DB " -an Emulator like a NES emulator <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=F8kx56OZQhg", 34, ">NES Emulator</a>", 13, 10
-    DB " -a software programmed in assembly <a target=", 34, "_blank", 34, " href=", 34, "https://www.youtube.com/watch?v=OG91c7xsNMc", 34, ">Notepad in Assembly</a>", 13, 10
-    DB " -a romhack for Pokemon Gen 1?", 13, 10, 13, 10
-    DB "We Ship:", 13, 10
-    DB "ur Project Grant , Small Dev boards(designed by us) for u to test programs etc.", 13, 10
-    DB "and most importantly:", 13, 10
-    DB "RETRO GRANTS!!!!", 13, 10
-    DB "like u can buy a Gameboy,a Retro-Computer so that you can use ur flash cart or extension board on!", 13, 10, 13, 10
-    DB "Planning,Designing prizes and open for Co-Orgs right now!", 13, 10
-    DB "RSVP Here:<a target=", 34, "_blank", 34, " href=", 34, "https://rsvp.hackclub.community/retrofio", 34, ">RSVP</a>", 13, 10
-    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709", 34, ">Slack:#Retrofio</a>", 13, 10, 00h
-    
-STR_GUI:   DB "gui", 00h
-MSG_GUI:
-    DB "+-------------------------------------+", 13, 10
-    DB "|      RETROFIO TOUCH COMMANDS        |", 13, 10
-    DB "+-------------------------------------+", 13, 10
-    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('help')", 34, ">[ HELP ]</a>   ", 13, 10
-    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('info')", 34, ">[ INFO ]</a>   ", 13, 10
-    DB "+-------------------------------------+", 13, 10, 00h
+MSG_INFO:   DB "Welcome to Retrofio!", 13, 10, 00h
+
+STR_GUI:    DB "gui", 00h
+MSG_GUI:    DB "GUI Display Mode", 13, 10, 00h
+
+STR_APPLE:  DB "apple", 00h
+
+; Pointer Variables
+STREAM_PTR_0: DB 00h           ; Bits 0-7
+STREAM_PTR_1: DB 00h           ; Bits 8-15
+STREAM_PTR_2: DB 00h           ; Bits 16-23
 
         END
