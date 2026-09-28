@@ -113,6 +113,10 @@ DO_FULL:
         OUT (00h), A
         LD HL, MSG_FULL
         CALL PRINT_STR
+        LD HL, MSG_INFO
+        CALL PRINT_STR
+        LD HL, MSG_FOOTER
+        CALL PRINT_STR
         LD A, 0Ah
         OUT (00h), A
         JP newpmt
@@ -147,6 +151,7 @@ MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   _
             DB '  \\/_/ /_/   \\/_____/     \\/_/   \\/_/ /_/   \\/_____/   \\/_/     \\/_/   \\/_____/ ', 13, 10
             DB "Hello Welcome to Retrofio OS!", 13, 10
             DB "Use help command to explore more :D", 13, 10
+            DB "The website is written with z80.js and it is actually an emulator!!!", 13, 10
             DB "PRESS <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('gui')", 34, ">HERE</a> for GUI (Mobile Ver) :D", 13, 10, 00h
 
 MSG_PROMPT: DB "Retrofio> ", 00h
@@ -191,15 +196,17 @@ MSG_GUI:
 
 STR_FULL:   DB "full", 00h
 MSG_FULL:
-    DB "+-------------------------------------+", 13, 10
-    DB "|            RETROFIO FAQ             |", 13, 10
-    DB "+-------------------------------------+", 13, 10
+    DB "<h1>Retrofio</h1>", 13, 10
+    DB "<h3>A YSWS for both Software and Hardware Retro Projects</h3>", 13, 10
+    DB "<h3>This Program is not yet sponsored by any ppl... Join the RSVP and Slack Channel for more upcoming news!</h3>",13,10,00h
+MSG_FOOTER:
+    DB "+----------------FAQ------------------+", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How do I join?</summary>", 13, 10
     DB "You can RSVP early for the event to express your interest! We'll share additional info when the event goes live.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Am I eligible?</summary>", 13, 10
     DB "Any teen 13-18 who has not been previously banned can participate.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">All of this? FOR FREE?!?</summary>", 13, 10
-    DB "Yep! This event is run by Hack Club, a 501(c)(3) non-profit organization d.b.a. Hack Club (EIN: 81-2908499). We provide these things for free to teenagers because of our generous sponsors.</details>", 13, 10, 13, 10
+    DB "Yep! This event is run by Hack Club, a 501(c)(3) non-profit organization d.b.a. Hack Club (EIN: 81-2908499). We provide these things for free to teenagers because of our generous sponsors.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">What can I build?</summary>", 13, 10
     DB "Build any project related to RETRO stuff! Software and hardware projects are allowed.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How can I track time?</summary>", 13, 10
