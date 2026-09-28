@@ -81,9 +81,9 @@ LINE_END:
         LD DE, STR_GUI          ; DE = "gui"
         CALL STR_CMP
         JP Z, DO_GUI
-        LD DE, STR_FAQ          ; DE = "faq"
+        LD DE, STR_FULL          ; DE = "faq"
         CALL STR_CMP
-        JP Z, DO_FAQ
+        JP Z, DO_FULL
         LD A, 0Ah               ; No match -> Newline
         OUT (00h), A            
         JP newpmt               
@@ -144,7 +144,7 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB ' ______      ______      ______   ______     ______      ______   __     ______    ', 13, 10
+MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
             DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
             DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
             DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
@@ -190,11 +190,11 @@ MSG_GUI:
     DB "+-------------------------------------+", 13, 10
     DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('help')", 34, ">[ HELP ]</a>   ", 13, 10
     DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('info')", 34, ">[ INFO ]</a>   ", 13, 10
-    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('faq')", 34, ">[ FAQ ]</a>    ", 13, 10
+    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('full')", 34, ">[ FULL GUI WEBSITE ]</a>    ", 13, 10
     DB "+-------------------------------------+", 13, 10, 00h
 
-STR_FAQ:    DB "faq", 00h
-MSG_FAQ:
+STR_FULL:    DB "full", 00h
+MSG_FULL:
     DB "+-------------------------------------+", 13, 10
     DB "|            RETROFIO FAQ             |", 13, 10
     DB "+-------------------------------------+", 13, 10
@@ -209,6 +209,7 @@ MSG_FAQ:
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How can I track time?</summary>", 13, 10
     DB "You'll use Hackatime to track project time.</details>", 13, 10, 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Do I have to be committed to this event when I RSVP?</summary>", 13, 10
-    DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 00h
+    DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 13, 10
+    DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10, 00h
 
         END
