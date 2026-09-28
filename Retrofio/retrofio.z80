@@ -1,17 +1,4 @@
-; =====================================================================
-; Upgraded Z80 CLI with Underflow & Overflow Protection
-; Max Input: 64 Bytes (63 Characters + 1 Null Terminator)
-; =====================================================================
-
-        ORG 0000h               
-
-MAX_BYTES EQU 63                ; Max characters allowed (leaves 1 byte for null)
-        LD A, 0Ch               ; Clear screen
-        OUT (01h), A   
-        LD HL, MSG_BOOT
-        CALL PRINT_STR 
-newpmt: LD HL, MSG_PROMPT       ; Print "Retrofio> "
-        CALL PRINT_STR          
+          
 
 MAIN_LOOP:
         LD DE, 8000h            ; DE = Buffer pointer
@@ -144,7 +131,7 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB ' ______      ______      ______   ______     ______      ______   __     ______    ', 13, 10
+MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
             DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
             DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
             DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
@@ -211,9 +198,9 @@ MSG_FULL:
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Do I have to be committed to this event when I RSVP?</summary>", 13, 10
     DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 13, 10
     DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10, 13, 10
-    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/", 34, ">Hack Club!</a> | ", 00h
-    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://forms.hackclub.com/bounty", 34, ">Fulfillment Bounty</a> | ", 00h
-    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-standard-terms-and-conditions", 34, ">Terms of Service</a> | ", 00h
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/", 34, ">Hack Club!</a> | "
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://forms.hackclub.com/bounty", 34, ">Fulfillment Bounty</a> | "
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-standard-terms-and-conditions", 34, ">Terms of Service</a> | "
     DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-privacy-notice", 34, ">Privacy Policy</a>", 13, 10, 00h
 
         END
