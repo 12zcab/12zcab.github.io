@@ -81,6 +81,9 @@ LINE_END:
         LD DE, STR_GUI          ; DE = "gui"
         CALL STR_CMP
         JP Z, DO_GUI
+        LD DE, STR_FAQ          ; DE = "faq"
+        CALL STR_CMP
+        JP Z, DO_FAQ
         LD A, 0Ah               ; No match -> Newline
         OUT (00h), A            
         JP newpmt               
@@ -109,8 +112,17 @@ DO_GUI:
         LD A, 0Ah
         OUT (00h), A
         JP newpmt
+DO_FAQ:
+        LD A, 0Ah
+        OUT (00h), A
+        LD HL, MSG_FAQ
+        CALL PRINT_STR
+        LD A, 0Ah
+        OUT (00h), A
+        JP newpmt
+
 ; =====================================================================
-; Subroutines & Data Section (Unchanged)
+; Subroutines & Data Section
 ; =====================================================================
 PRINT_STR:
         LD A, (HL)              
@@ -132,7 +144,7 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
+MSG_BOOT:   DB ' ______      ______      ______   ______     ______      ______   __     ______    ', 13, 10
             DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
             DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
             DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
@@ -144,7 +156,8 @@ MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   _
 MSG_PROMPT: DB "Retrofio> ", 00h
 STR_HELP:   DB "help", 00h
 MSG_HELP:   DB "Command List:", 13, 10
-            DB "info - print out info about Retrofio", 13, 10, 00h
+            DB "info - print out info about Retrofio", 13, 10
+            DB "faq  - print out Retrofio FAQ", 13, 10, 00h
 STR_INFO:   DB "info", 00h
 MSG_INFO:
     DB "Welcome to Retrofio!", 13, 10
@@ -170,13 +183,32 @@ MSG_INFO:
     DB "RSVP Here:<a target=", 34, "_blank", 34, " href=", 34, "https://rsvp.hackclub.community/retrofio", 34, ">RSVP</a>", 13, 10
     DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.slack.com/archives/C0BPZBSFFB8/p1786635398562709", 34, ">Slack:#Retrofio</a>", 13, 10, 00h
     
-STR_GUI:   DB "gui", 00h
+STR_GUI:    DB "gui", 00h
 MSG_GUI:
     DB "+-------------------------------------+", 13, 10
     DB "|      RETROFIO TOUCH COMMANDS        |", 13, 10
     DB "+-------------------------------------+", 13, 10
     DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('help')", 34, ">[ HELP ]</a>   ", 13, 10
     DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('info')", 34, ">[ INFO ]</a>   ", 13, 10
+    DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('faq')", 34, ">[ FAQ ]</a>    ", 13, 10
     DB "+-------------------------------------+", 13, 10, 00h
+
+STR_FAQ:    DB "faq", 00h
+MSG_FAQ:
+    DB "+-------------------------------------+", 13, 10
+    DB "|            RETROFIO FAQ             |", 13, 10
+    DB "+-------------------------------------+", 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How do I join?</summary>", 13, 10
+    DB "You can RSVP early for the event to express your interest! We'll share additional info when the event goes live.</details>", 13, 10, 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Am I eligible?</summary>", 13, 10
+    DB "Any teen 13-18 who has not been previously banned can participate.</details>", 13, 10, 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">All of this? FOR FREE?!?</summary>", 13, 10
+    DB "Yep! This event is run by Hack Club, a 501(c)(3) non-profit organization d.b.a. Hack Club (EIN: 81-2908499). We provide these things for free to teenagers because of our generous sponsors.</details>", 13, 10, 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">What can I build?</summary>", 13, 10
+    DB "Build any project related to RETRO stuff! Software and hardware projects are allowed.</details>", 13, 10, 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How can I track time?</summary>", 13, 10
+    DB "You'll use Hackatime to track project time.</details>", 13, 10, 13, 10
+    DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Do I have to be committed to this event when I RSVP?</summary>", 13, 10
+    DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 00h
 
         END
