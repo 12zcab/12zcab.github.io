@@ -81,7 +81,7 @@ LINE_END:
         LD DE, STR_GUI          ; DE = "gui"
         CALL STR_CMP
         JP Z, DO_GUI
-        LD DE, STR_FULL          ; DE = "faq"
+        LD DE, STR_FULL         ; DE = "full"
         CALL STR_CMP
         JP Z, DO_FULL
         LD A, 0Ah               ; No match -> Newline
@@ -112,10 +112,10 @@ DO_GUI:
         LD A, 0Ah
         OUT (00h), A
         JP newpmt
-DO_FAQ:
+DO_FULL:
         LD A, 0Ah
         OUT (00h), A
-        LD HL, MSG_FAQ
+        LD HL, MSG_FULL
         CALL PRINT_STR
         LD A, 0Ah
         OUT (00h), A
@@ -144,7 +144,7 @@ STR_CMP:
         INC DE                  
         JP STR_CMP              
 
-MSG_BOOT:   DB ' ______     ______     ______   ______     ______     ______   __     ______    ', 13, 10
+MSG_BOOT:   DB ' ______      ______      ______   ______     ______      ______   __     ______    ', 13, 10
             DB '/\\  == \\   /\\  ___\\   /\\__  _\\ /\\  == \\   /\\  __ \\   /\\  ___\\ /\\ \\   /\\  __ \\   ', 13, 10
             DB '\\ \\  __<   \\ \\  __\\   \\/_/\\ \\/ \\ \\  __<   \\ \\ \\/\\ \\  \\ \\  __\\ \\ \\ \\  \\ \\ \\/\\ \\  ', 13, 10
             DB ' \\ \\_\\ \\_\\  \\ \\_____\\    \\ \\_\\  \\ \\_\\ \\_\\  \\ \\_____\\  \\ \\_\\    \\ \\_\\  \\ \\_____\\ ', 13, 10
@@ -157,7 +157,7 @@ MSG_PROMPT: DB "Retrofio> ", 00h
 STR_HELP:   DB "help", 00h
 MSG_HELP:   DB "Command List:", 13, 10
             DB "info - print out info about Retrofio", 13, 10
-            DB "faq  - print out Retrofio FAQ", 13, 10, 00h
+            DB "full - display the whole website", 13, 10, 00h
 STR_INFO:   DB "info", 00h
 MSG_INFO:
     DB "Welcome to Retrofio!", 13, 10
@@ -193,7 +193,7 @@ MSG_GUI:
     DB "| <a style=", 34, "color:#0f0;cursor:pointer", 34, " onclick=", 34, "window.Z80System.typeCommand('full')", 34, ">[ FULL GUI WEBSITE ]</a>    ", 13, 10
     DB "+-------------------------------------+", 13, 10, 00h
 
-STR_FULL:    DB "full", 00h
+STR_FULL:   DB "full", 00h
 MSG_FULL:
     DB "+-------------------------------------+", 13, 10
     DB "|            RETROFIO FAQ             |", 13, 10
@@ -210,6 +210,10 @@ MSG_FULL:
     DB "You'll use Hackatime to track project time.</details>", 13, 10, 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Do I have to be committed to this event when I RSVP?</summary>", 13, 10
     DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 13, 10
-    DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10, 00h
+    DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10, 13, 10
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/", 34, ">Hack Club!</a> | ", 00h
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://forms.hackclub.com/bounty", 34, ">Fulfillment Bounty</a> | ", 00h
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-standard-terms-and-conditions", 34, ">Terms of Service</a> | ", 00h
+    DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-privacy-notice", 34, ">Privacy Policy</a>", 13, 10, 00h
 
         END
