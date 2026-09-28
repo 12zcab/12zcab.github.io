@@ -1,4 +1,13 @@
-          
+        ORG 0000h               
+
+MAX_BYTES EQU 63                ; Max characters allowed (leaves 1 byte for null)
+        LD A, 0Ch               ; Clear screen
+        OUT (01h), A   
+        LD HL, MSG_BOOT
+        CALL PRINT_STR 
+newpmt: LD HL, MSG_PROMPT       ; Print "Retrofio> "
+        CALL PRINT_STR                  
+
 
 MAIN_LOOP:
         LD DE, 8000h            ; DE = Buffer pointer
@@ -186,18 +195,18 @@ MSG_FULL:
     DB "|            RETROFIO FAQ             |", 13, 10
     DB "+-------------------------------------+", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How do I join?</summary>", 13, 10
-    DB "You can RSVP early for the event to express your interest! We'll share additional info when the event goes live.</details>", 13, 10, 13, 10
+    DB "You can RSVP early for the event to express your interest! We'll share additional info when the event goes live.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Am I eligible?</summary>", 13, 10
-    DB "Any teen 13-18 who has not been previously banned can participate.</details>", 13, 10, 13, 10
+    DB "Any teen 13-18 who has not been previously banned can participate.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">All of this? FOR FREE?!?</summary>", 13, 10
     DB "Yep! This event is run by Hack Club, a 501(c)(3) non-profit organization d.b.a. Hack Club (EIN: 81-2908499). We provide these things for free to teenagers because of our generous sponsors.</details>", 13, 10, 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">What can I build?</summary>", 13, 10
-    DB "Build any project related to RETRO stuff! Software and hardware projects are allowed.</details>", 13, 10, 13, 10
+    DB "Build any project related to RETRO stuff! Software and hardware projects are allowed.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">How can I track time?</summary>", 13, 10
-    DB "You'll use Hackatime to track project time.</details>", 13, 10, 13, 10
+    DB "You'll use Hackatime to track project time.</details>", 13, 10
     DB "<details><summary style=", 34, "color:#0f0;cursor:pointer", 34, ">Do I have to be committed to this event when I RSVP?</summary>", 13, 10
-    DB "Nope! This is just to gauge interest within the community.</details>", 13, 10, 13, 10
-    DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10, 13, 10
+    DB "Nope! This is just to gauge interest within the community.</details>", 13, 10
+    DB "Made with <3 by 12zcab@Hackclub 2026", 13, 10
     DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/", 34, ">Hack Club!</a> | "
     DB "<a target=", 34, "_blank", 34, " href=", 34, "https://forms.hackclub.com/bounty", 34, ">Fulfillment Bounty</a> | "
     DB "<a target=", 34, "_blank", 34, " href=", 34, "https://hackclub.com/privacy-and-terms#hack-club-standard-terms-and-conditions", 34, ">Terms of Service</a> | "
