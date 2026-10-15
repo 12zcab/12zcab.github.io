@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HKDSE Physics - 3D Ripple Tank & Light Refraction Simulator</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- KaTeX for LaTeX Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: #090d16;
+            color: #f1f5f9;
+            user-select: none;
+        }
+        /* Glassmorphism styling */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.82);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 20px 30px rgba(0, 0, 0, 0.5);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(56, 189, 248, 0.4);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(56, 189, 248, 0.7);
+        }
+        /* Tab styling */
+        .tab-btn.active {
+            border-bottom: 2px solid #38bdf8;
+            color: #38bdf8;
+            background: rgba(56, 189, 248, 0.1);
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative overflow-hidden text-slate-100">
+
+    <!-- 3D WebGL Canvas Container -->
+    <div id="canvas-container" class="w-full h-full absolute inset-0 z-0 cursor-grab active:cursor-grabbing"></div>
+
+    <!-- Top Control Bar / Toolbar -->
+    <div class="absolute top-3 left-3 right-3 z-10 flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        <!-- Title Badge -->
+        <div class="glass-panel px-4 py-2 rounded-xl flex items-center gap-3 pointer-events-auto">
+            <div class="w-8 h-8 rounded-lg bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-400">
+                <i class="fa-solid font-bold fa-water text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-sm sm:text-base text-cyan-300 tracking-wide flex items-center gap-2">
+                    HKDSE Physics 3D Ripple Tank
+                    <span class="text-[10px] bg-cyan-950 text-cyan-400 px-2 py-0.5 rounded border border-cyan-800">Refraction & Rays</span>
+                </h1>
+                <p class="text-[11px] text-slate-400 hidden sm:block">Wave Motion • Overhead Parallel Light Snell Refraction • Caustics</p>
+            </div>
+        </div>
+
+        <!-- Simulation Quick Action Controls -->
+        <div class="glass-panel px-3 py-1.5 rounded-xl flex items-center gap-2 pointer-events-auto shadow-lg">
+            <button id="btn-play-pause" class="w-9 h-9 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition flex items-center justify-center" title="Play / Pause">
+                <i id="icon-play-pause" class="fa-solid fa-pause"></i>
+            </button>
+            <button id="btn-reset" class="w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition flex items-center justify-center" title="Reset Simulation Time">
+                <i class="fa-solid fa-rotate-left"></i>
+            </button>
+            <div class="h-5 w-px bg-slate-700 mx-1"></div>
+            <!-- Speed Slider -->
+            <div class="flex items-center gap-2 text-xs">
+                <span class="text-slate-400 hidden md:inline"><i class="fa-solid fa-gauge-high mr-1"></i>Speed</span>
+                <input id="slider-speed" type="range" min="0.1" max="2.0" step="0.1" value="1.0" class="w-16 sm:w-24 accent-cyan-400 cursor-pointer">
+                <span id="txt-speed" class="w-8 text-cyan-300 font-mono text-[11px]">1.0x</span>
+            </div>
+        </div>
+
+        <!-- Camera Preset Buttons -->
+        <div class="glass-panel px-2 py-1.5 rounded-xl flex items-center gap-1.5 pointer-events-auto">
+            <button id="cam-iso" class="px-2.5 py-1 text-xs rounded-lg bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 hover:bg-cyan-500/30 transition flex items-center gap-1.5" title="3D Isometric View">
+                <i class="fa-solid fa-cube"></i> <span class="hidden lg:inline">3D Iso</span>
+            </button>
+            <button id="cam-top" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5" title="Top-Down Overhead View">
+                <i class="fa-solid fa-arrow-down"></i> <span class="hidden lg:inline">Top View</span>
+            </button>
+            <button id="cam-side" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800/80 text-slate-300 hover:bg-slate-700 transition flex items-center gap-1.5" title="Side Profile Slice View">
+                <i class="fa-solid fa-border-all"></i> <span class="hidden lg:inline">Side View</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Sidebar Drawer (Control Panel) -->
+    <div id="sidebar" class="absolute top-16 left-3 bottom-3 w-80 max-w-[calc(100vw-1.5rem)] glass-panel rounded-2xl z-20 flex flex-col overflow-hidden transition-all duration-300">
+        <!-- Sidebar Header with Collapse Button -->
+        <div class="p-3 border-b border-slate-700/60 flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-sliders text-cyan-400"></i> Physics Controls
+            </span>
+            <button id="btn-toggle-sidebar" class="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition">
+                <i class="fa-solid fa-chevron-left"></i>
+            </button>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="flex border-b border-slate-800 bg-slate-900/60 text-xs">
+            <button class="tab-btn active flex-1 py-2 px-2 text-center font-medium transition" data-tab="tab-source">
+                <i class="fa-solid fa-wave-square block mb-1 text-sm"></i> Source
+            </button>
+            <button class="tab-btn flex-1 py-2 px-2 text-center font-medium transition" data-tab="tab-optics">
+                <i class="fa-solid fa-sun block mb-1 text-sm"></i> Optics
+            </button>
+            <button class="tab-btn flex-1 py-2 px-2 text-center font-medium transition" data-tab="tab-toggles">
+                <i class="fa-solid fa-layer-group block mb-1 text-sm"></i> Layers
+            </button>
+            <button class="tab-btn flex-1 py-2 px-2 text-center font-medium transition" data-tab="tab-math">
+                <i class="fa-solid fa-calculator block mb-1 text-sm"></i> Theory
+            </button>
+        </div>
+
+        <!-- Tab Contents Container -->
+        <div class="flex-1 overflow-y-auto p-3 space-y-4">
+
+            <!-- TAB 1: SOURCE MODES & WAVE PARAMETERS -->
+            <div id="tab-source" class="tab-content space-y-4">
+                <!-- Vibration Source Selector -->
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold mb-1.5 block">Vibration Source Type:</label>
+                    <div class="grid grid-cols-2 gap-1.5">
+                        <button class="mode-btn active p-2 text-xs rounded-lg glass-card border-cyan-500/50 text-cyan-300 font-medium text-left flex items-center gap-2" data-mode="linear">
+                            <i class="fa-solid fa-grip-lines-vertical text-cyan-400"></i> Linear Bar
+                        </button>
+                        <button class="mode-btn p-2 text-xs rounded-lg glass-card text-slate-300 hover:text-white font-medium text-left flex items-center gap-2" data-mode="single">
+                            <i class="fa-solid fa-circle-dot text-cyan-400"></i> Single Point
+                        </button>
+                        <button class="mode-btn p-2 text-xs rounded-lg glass-card text-slate-300 hover:text-white font-medium text-left flex items-center gap-2" data-mode="double">
+                            <i class="fa-solid fa-arrows-split-up-and-left text-cyan-400"></i> Double Point
+                        </button>
+                        <button class="mode-btn p-2 text-xs rounded-lg glass-card text-slate-300 hover:text-white font-medium text-left flex items-center gap-2" data-mode="diffraction_single">
+                            <i class="fa-solid fa-bars text-cyan-400"></i> Single Slit
+                        </button>
+                        <button class="mode-btn p-2 text-xs rounded-lg glass-card text-slate-300 hover:text-white font-medium text-left flex items-center gap-2 col-span-2" data-mode="diffraction_double">
+                            <i class="fa-solid fa-table-columns text-cyan-400"></i> Double Slit Diffraction
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Frequency f -->
+                <div class="glass-card p-3 rounded-xl space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Frequency $f$:</span>
+                        <span id="txt-freq" class="text-cyan-300 font-mono">1.50 Hz</span>
+                    </div>
+                    <input id="slider-freq" type="range" min="0.5" max="3.5" step="0.1" value="1.5" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+
+                <!-- Wavelength lambda -->
+                <div class="glass-card p-3 rounded-xl space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Wavelength $\lambda$:</span>
+                        <span id="txt-lambda" class="text-cyan-300 font-mono">1.20 m</span>
+                    </div>
+                    <input id="slider-lambda" type="range" min="0.4" max="2.5" step="0.05" value="1.2" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+
+                <!-- Wave Amplitude A -->
+                <div class="glass-card p-3 rounded-xl space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Amplitude $A$:</span>
+                        <span id="txt-amp" class="text-cyan-300 font-mono">0.18 m</span>
+                    </div>
+                    <input id="slider-amp" type="range" min="0.05" max="0.35" step="0.01" value="0.18" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+
+                <!-- Double Source Separation d (Dynamic) -->
+                <div id="ctrl-separation" class="glass-card p-3 rounded-xl space-y-1 hidden">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Source Separation $d$:</span>
+                        <span id="txt-sep" class="text-cyan-300 font-mono">2.00 m</span>
+                    </div>
+                    <input id="slider-sep" type="range" min="0.6" max="4.0" step="0.1" value="2.0" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+
+                <!-- Slit Width w (Dynamic for Diffraction) -->
+                <div id="ctrl-slit" class="glass-card p-3 rounded-xl space-y-1 hidden">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Slit Width $a$:</span>
+                        <span id="txt-slit" class="text-cyan-300 font-mono">1.20 m</span>
+                    </div>
+                    <input id="slider-slit" type="range" min="0.4" max="2.8" step="0.1" value="1.2" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+            </div>
+
+            <!-- TAB 2: OVERHEAD LIGHT & REFRACTION OPTICS -->
+            <div id="tab-optics" class="tab-content space-y-4 hidden">
+                <!-- Light Ray Density Selector -->
+                <div>
+                    <label class="text-xs text-slate-400 font-semibold mb-1.5 block">Light Ray Density:</label>
+                    <select id="select-density" class="w-full bg-slate-800 text-slate-200 border border-slate-700 rounded-xl p-2 text-xs focus:outline-none focus:border-cyan-400">
+                        <option value="10">Sparse (10 × 10 = 100 active rays)</option>
+                        <option value="20" selected>Medium (20 × 20 = 400 active rays)</option>
+                        <option value="30">Dense (30 × 30 = 900 active rays)</option>
+                        <option value="40">Ultra Dense (40 × 40 = 1,600 active rays)</option>
+                        <option value="50">Extreme (50 × 50 = 2,500 active rays)</option>
+                    </select>
+                </div>
+
+                <!-- Water Refractive Index n -->
+                <div class="glass-card p-3 rounded-xl space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Refractive Index $n_{\text{water}}$:</span>
+                        <span id="txt-index" class="text-cyan-300 font-mono">1.33</span>
+                    </div>
+                    <input id="slider-index" type="range" min="1.00" max="1.60" step="0.01" value="1.33" class="w-full accent-cyan-400 cursor-pointer">
+                    <p class="text-[10px] text-slate-400">Standard water = 1.333. Higher $n$ bends rays more sharply.</p>
+                </div>
+
+                <!-- Light Angle / Tilt -->
+                <div class="glass-card p-3 rounded-xl space-y-1">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-300 font-medium">Incident Angle $\theta_{\text{inc}}$:</span>
+                        <span id="txt-angle" class="text-cyan-300 font-mono">0.0° (Vertical)</span>
+                    </div>
+                    <input id="slider-angle" type="range" min="-30" max="30" step="1" value="0" class="w-full accent-cyan-400 cursor-pointer">
+                </div>
+
+                <!-- Ray Styling Options -->
+                <div class="glass-card p-3 rounded-xl space-y-2">
+                    <span class="text-xs text-slate-300 font-semibold block">Ray Visualization:</span>
+                    <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+                        <span>Incident Rays (Air)</span>
+                        <input id="chk-inc-rays" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                    </label>
+                    <label class="flex items-center justify-between text-xs text-slate-300 cursor-pointer">
+                        <span>Refracted Rays (Water)</span>
+                        <input id="chk-ref-rays" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                    </label>
+                </div>
+            </div>
+
+            <!-- TAB 3: LAYER VISIBILITY CHECKLIST -->
+            <div id="tab-toggles" class="tab-content space-y-2 hidden">
+                <span class="text-xs text-slate-400 font-semibold block mb-2">Display Elements Checklist:</span>
+                
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-water text-cyan-400"></i> 3D Water Surface Mesh</span>
+                    <input id="chk-water" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-tv text-amber-400"></i> Caustics Screen (Bottom)</span>
+                    <input id="chk-caustics" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-vial text-emerald-400"></i> Vibrator Bar / Sources</span>
+                    <input id="chk-vibrator" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-diagram-project text-purple-400"></i> Nodal / Antinodal Overlay</span>
+                    <input id="chk-nodal" type="checkbox" class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-[#ff0055] text-rose-400"></i> Surface Normal Vectors</span>
+                    <input id="chk-normals" type="checkbox" class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-crosshairs text-red-400"></i> Interactive Probe Marker</span>
+                    <input id="chk-probe" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+
+                <label class="glass-card p-2.5 rounded-xl flex items-center justify-between text-xs text-slate-200 cursor-pointer hover:bg-slate-800 transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-border-none text-slate-400"></i> Diffraction Barrier Slits</span>
+                    <input id="chk-barriers" type="checkbox" checked class="accent-cyan-400 w-4 h-4 rounded">
+                </label>
+            </div>
+
+            <!-- TAB 4: HKDSE THEORY & MATH FORMULAS -->
+            <div id="tab-math" class="tab-content space-y-3 hidden text-xs">
+                <div class="glass-card p-3 rounded-xl space-y-2">
+                    <h3 class="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
+                        <i class="fa-solid fa-book-open"></i> 1. Wave Speed Relation
+                    </h3>
+                    <div id="math-speed" class="text-center py-1 bg-slate-900/80 rounded-lg font-mono"></div>
+                    <p class="text-[11px] text-slate-400">Wave speed $v$ depends on medium depth. Frequency $f$ is fixed by the source vibrator.</p>
+                </div>
+
+                <div class="glass-card p-3 rounded-xl space-y-2">
+                    <h3 class="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
+                        <i class="fa-solid fa-calculator"></i> 2. Snell's Law of Refraction
+                    </h3>
+                    <div id="math-snell" class="text-center py-1 bg-slate-900/80 rounded-lg font-mono"></div>
+                    <p class="text-[11px] text-slate-400">Overhead rays enter water surface normal $\mathbf{N}$. Rays bend towards normal ($n_2 > n_1$).</p>
+                </div>
+
+                <div class="glass-card p-3 rounded-xl space-y-2">
+                    <h3 class="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
+                        <i class="fa-solid fa-compress-arrows-alt"></i> 3. Ripple Lens Effect
+                    </h3>
+                    <div id="math-lens" class="text-center py-1 bg-slate-900/80 rounded-lg font-mono"></div>
+                    <ul class="text-[11px] text-slate-300 list-disc list-inside space-y-1">
+                        <li><b class="text-amber-300">Crest = Convex Lens:</b> Converges light $\rightarrow$ Bright projection band.</li>
+                        <li><b class="text-cyan-300">Trough = Concave Lens:</b> Diverges light $\rightarrow$ Dark projection band.</li>
+                    </ul>
+                </div>
+
+                <div class="glass-card p-3 rounded-xl space-y-2">
+                    <h3 class="font-bold text-cyan-300 text-xs flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrows-left-right"></i> 4. Interference Path Difference
+                    </h3>
+                    <div id="math-interf" class="text-center py-1 bg-slate-900/80 rounded-lg font-mono"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Floating Water Probe Inspector HUD (Top Right) -->
+    <div id="probe-hud" class="absolute top-16 right-3 glass-panel p-3 rounded-2xl z-10 w-72 max-w-[calc(100vw-1.5rem)] text-xs space-y-2">
+        <div class="flex items-center justify-between border-b border-slate-700/60 pb-1.5">
+            <span class="font-bold text-cyan-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-crosshairs text-rose-400"></i> Water Probe Inspector
+            </span>
+            <span class="text-[10px] text-slate-400">Click water to place</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2 text-[11px]">
+            <div class="bg-slate-900/60 p-2 rounded-lg">
+                <span class="text-slate-400 block text-[10px]">Position (X, Z)</span>
+                <span id="probe-pos" class="font-mono text-slate-200">X: 0.00, Z: 0.00</span>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded-lg">
+                <span class="text-slate-400 block text-[10px]">Height $z(x,z)$</span>
+                <span id="probe-height" class="font-mono text-cyan-300">+0.00 m</span>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded-lg">
+                <span class="text-slate-400 block text-[10px]">Inc. Angle $\theta_1$</span>
+                <span id="probe-inc" class="font-mono text-amber-300">0.0°</span>
+            </div>
+            <div class="bg-slate-900/60 p-2 rounded-lg">
+                <span class="text-slate-400 block text-[10px]">Ref. Angle $\theta_2$</span>
+                <span id="probe-ref" class="font-mono text-emerald-300">0.0°</span>
+            </div>
+        </div>
+        <div class="bg-slate-900/60 p-2 rounded-lg flex items-center justify-between">
+            <span class="text-slate-400 text-[10px]">Local Surface Behavior:</span>
+            <span id="probe-curvature" class="font-semibold text-cyan-300">Flat Surface</span>
+        </div>
+    </div>
+
+    <!-- Floating Side Cross-Section View 2D Canvas (Bottom Right) -->
+    <div id="slice-container" class="absolute bottom-3 right-3 glass-panel p-2.5 rounded-2xl z-10 w-80 sm:w-96 max-w-[calc(100vw-1.5rem)] text-xs space-y-1.5">
+        <div class="flex items-center justify-between px-1">
+            <span class="font-bold text-cyan-300 flex items-center gap-1.5 text-xs">
+                <i class="fa-solid fa-chart-area"></i> 2D Side Wave Profile Slice
+            </span>
+            <span class="text-[10px] text-slate-400">At Probe Z position</span>
+        </div>
+        <div class="relative bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+            <canvas id="slice-canvas" width="380" height="150" class="w-full h-32 block"></canvas>
+        </div>
+        <div class="flex items-center justify-between text-[10px] text-slate-400 px-1">
+            <span>Air Interface ($n=1.0$)</span>
+            <span class="text-cyan-400">Water ($n=1.33$)</span>
+            <span>Caustics Screen Floor</span>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        // --- GLOBAL CONSTANTS & SIMULATION STATE ---
+        const STATE = {
+            isPlaying: true,
+            time: 0,
+            speed: 1.0,
+            mode: 'linear', // 'linear', 'single', 'double', 'diffraction_single', 'diffraction_double'
+            frequency: 1.5,
+            wavelength: 1.2,
+            amplitude: 0.18,
+            separation: 2.0, // Double source separation d
+            slitWidth: 1.2,  // Diffraction slit width
+            nWater: 1.33,
+            rayDensity: 20,  // Grid size N x N
+            lightAngle: 0,   // Incident tilt in degrees
+            showIncRays: true,
+            showRefRays: true,
+            showWater: true,
+            showCaustics: true,
+            showVibrator: true,
+            showNodal: false,
+            showNormals: false,
+            showProbe: true,
+            showBarriers: true,
+            probePos: { x: 0, z: 0 }
+        };
+
+        // --- THREE.JS SCENE SETUP ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x070b14);
+        scene.fog = new THREE.FogExp2(0x070b14, 0.025);
+
+        // Camera
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+        camera.position.set(0, 7.5, 9.5);
+
+        // Renderer
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Orbit Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxPolarAngle = Math.PI / 2 + 0.05; // Stay above ground
+        controls.minDistance = 3;
+        controls.maxDistance = 25;
+        controls.target.set(0, -0.5, 0);
+
+        // Ambient & Directional Lighting
+        const ambientLight = new THREE.AmbientLight(0x38bdf8, 0.35);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 0.9);
+        mainLight.position.set(0, 10, 0);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 1024;
+        mainLight.shadow.mapSize.height = 1024;
+        scene.add(mainLight);
+
+        const pointLight = new THREE.PointLight(0x00f3ff, 0.6, 15);
+        pointLight.position.set(0, 2, 0);
+        scene.add(pointLight);
+
+        // --- WORLD DIMENSIONS & MESHES ---
+        const WATER_SIZE = 9.0;
+        const WATER_SEGMENTS = 120; // High res mesh for smooth waves
+        const Y_SCREEN = -3.5;
+        const Y_WATER_REST = 0.0;
+
+        // 1. Water Surface Mesh
+        const waterGeo = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE, WATER_SEGMENTS, WATER_SEGMENTS);
+        waterGeo.rotateX(-Math.PI / 2); // Lay flat on XZ plane
+
+        const waterMat = new THREE.MeshPhysicalMaterial({
+            color: 0x006699,
+            transmission: 0.85,
+            opacity: 0.9,
+            transparent: true,
+            roughness: 0.1,
+            ior: 1.33,
+            reflectivity: 0.5,
+            side: THREE.DoubleSide,
+            wireframe: false
+        });
+
+        const waterMesh = new THREE.Mesh(waterGeo, waterMat);
+        waterMesh.position.y = Y_WATER_REST;
+        scene.add(waterMesh);
+
+        // Wireframe overlay for crisp wave crest definition
+        const wireMat = new THREE.MeshBasicMaterial({
+            color: 0x38bdf8,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.15
+        });
+        const wireMesh = new THREE.Mesh(waterGeo, wireMat);
+        wireMesh.position.y = Y_WATER_REST + 0.002;
+        scene.add(wireMesh);
+
+        // 2. Caustics Floor Projection Screen Canvas & Mesh
+        const causticsCanvas = document.createElement('canvas');
+        causticsCanvas.width = 512;
+        causticsCanvas.height = 512;
+        const causticsCtx = causticsCanvas.getContext('2d');
+
+        const causticsTexture = new THREE.CanvasTexture(causticsCanvas);
+        const causticsGeo = new THREE.PlaneGeometry(WATER_SIZE, WATER_SIZE);
+        causticsGeo.rotateX(-Math.PI / 2);
+
+        const causticsMat = new THREE.MeshStandardMaterial({
+            map: causticsTexture,
+            roughness: 0.8,
+            metalness: 0.1
+        });
+        const causticsMesh = new THREE.Mesh(causticsGeo, causticsMat);
+        causticsMesh.position.y = Y_SCREEN;
+        causticsMesh.receiveShadow = true;
+        scene.add(causticsMesh);
+
+        // Screen Frame border
+        const frameGeo = new THREE.BoxGeometry(WATER_SIZE + 0.4, 0.2, WATER_SIZE + 0.4);
+        const frameMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5 });
+        const frameMesh = new THREE.Mesh(frameGeo, frameMat);
+        frameMesh.position.y = Y_SCREEN - 0.15;
+        scene.add(frameMesh);
+
+        // 3. FIXED Linear Vibrator & Source Meshes
+        // Vibrator bar aligned cleanly along Z-axis at X = -4.0, vibrating vertically
+        const vibratorGroup = new THREE.Group();
+        scene.add(vibratorGroup);
+
+        const barGeo = new THREE.CylinderGeometry(0.08, 0.08, WATER_SIZE - 0.2, 16);
+        barGeo.rotateX(Math.PI / 2); // Align along Z axis
+        const barMat = new THREE.MeshStandardMaterial({
+            color: 0x00f3ff,
+            metalness: 0.8,
+            roughness: 0.2,
+            emissive: 0x003344
+        });
+        const vibratorBarMesh = new THREE.Mesh(barGeo, barMat);
+        vibratorBarMesh.position.set(-4.0, 0, 0);
+        vibratorGroup.add(vibratorBarMesh);
+
+        // Point sources for double/single source
+        const sourceGeo = new THREE.SphereGeometry(0.18, 16, 16);
+        const sourceMat = new THREE.MeshStandardMaterial({ color: 0xfacc15, emissive: 0x664400 });
+        const pointSource1 = new THREE.Mesh(sourceGeo, sourceMat);
+        const pointSource2 = new THREE.Mesh(sourceGeo, sourceMat);
+        vibratorGroup.add(pointSource1);
+        vibratorGroup.add(pointSource2);
+
+        // 4. Slit Barriers Group for Diffraction Modes
+        const barrierGroup = new THREE.Group();
+        const barrierMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.3, metalness: 0.5 });
+        scene.add(barrierGroup);
+
+        // 5. Interactive Probe Marker Mesh
+        const probeGroup = new THREE.Group();
+        const probePinGeo = new THREE.CylinderGeometry(0.02, 0.02, 1.2, 8);
+        const probePinMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
+        const probePin = new THREE.Mesh(probePinGeo, probePinMat);
+        probePin.position.y = 0.6;
+        probeGroup.add(probePin);
+
+        const probeRingGeo = new THREE.RingGeometry(0.12, 0.16, 16);
+        probeRingGeo.rotateX(-Math.PI / 2);
+        const probeRingMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e, side: THREE.DoubleSide });
+        const probeRing = new THREE.Mesh(probeRingGeo, probeRingMat);
+        probeRing.position.y = 0.02;
+        probeGroup.add(probeRing);
+
+        scene.add(probeGroup);
+
+        // 6. Dynamic Light Ray Segments Mesh
+        let lightRaySegments;
+        let normalLinesMesh;
+        let maxRaysCount = 2500;
+
+        function createRayBuffers() {
+            if (lightRaySegments) scene.remove(lightRaySegments);
+
+            // Each ray has 2 lines (4 vertices, 12 floats): Incident + Refracted
+            const rayPositions = new Float32Array(maxRaysCount * 12);
+            const rayColors = new Float32Array(maxRaysCount * 12);
+
+            const rayGeo = new THREE.BufferGeometry();
+            rayGeo.setAttribute('position', new THREE.BufferAttribute(rayPositions, 3));
+            rayGeo.setAttribute('color', new THREE.BufferAttribute(rayColors, 3));
+
+            const rayMat = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.65,
+                blending: THREE.AdditiveBlending
+            });
+
+            lightRaySegments = new THREE.LineSegments(rayGeo, rayMat);
+            scene.add(lightRaySegments);
+        }
+        createRayBuffers();
+
+        // --- PHYSICS WAVE EQUATION ENGINE ---
+        function getWaterHeight(x, z, t) {
+            const freq = STATE.frequency;
+            const lambda = STATE.wavelength;
+            const amp = STATE.amplitude;
+            const k = (2 * Math.PI) / lambda;
+            const omega = 2 * Math.PI * freq;
+            let y = 0;
+
+            if (STATE.mode === 'linear') {
+                // Plane waves propagating along +X from vibrating bar at x = -4.0
+                const x0 = -4.0;
+                if (x >= x0) {
+                    const dist = x - x0;
+                    y = amp * Math.cos(k * dist - omega * t) * Math.exp(-0.08 * dist);
+                } else {
+                    y = amp * Math.sin(omega * t);
+                }
+            } else if (STATE.mode === 'single') {
+                // Single Circular Ripple Source at (0, 0)
+                const r = Math.sqrt(x * x + z * z);
+                const damping = Math.exp(-0.2 * r);
+                const factor = 1 / Math.sqrt(r + 0.4);
+                y = amp * Math.cos(k * r - omega * t) * damping * factor;
+            } else if (STATE.mode === 'double') {
+                // Two Coherent Sources at Z = -d/2 and Z = +d/2 along X = 0
+                const d = STATE.separation;
+                const r1 = Math.sqrt(x * x + (z - d / 2) ** 2);
+                const r2 = Math.sqrt(x * x + (z + d / 2) ** 2);
+
+                const y1 = amp * Math.cos(k * r1 - omega * t) * Math.exp(-0.18 * r1) / Math.sqrt(r1 + 0.4);
+                const y2 = amp * Math.cos(k * r2 - omega * t) * Math.exp(-0.18 * r2) / Math.sqrt(r2 + 0.4);
+                y = y1 + y2;
+            } else if (STATE.mode === 'diffraction_single' || STATE.mode === 'diffraction_double') {
+                // Plane wave hitting barrier at X = -1.0
+                const xBarrier = -1.0;
+                if (x < xBarrier) {
+                    const dist = x - (-4.0);
+                    y = amp * Math.cos(k * dist - omega * t) * Math.exp(-0.06 * dist);
+                } else {
+                    // Huygens' Secondary Wavelets behind barrier
+                    const slits = getSlitCenters();
+                    let sum = 0;
+                    let numSources = 0;
+
+                    slits.forEach(slitZ => {
+                        const N = 8; // Points per slit
+                        const w = STATE.slitWidth;
+                        for (let i = 0; i < N; i++) {
+                            const zs = (slitZ - w / 2) + (w / (N - 1)) * i;
+                            const dx = x - xBarrier;
+                            const dz = z - zs;
+                            const r = Math.sqrt(dx * dx + dz * dz);
+                            sum += (amp * 0.35 / Math.sqrt(r + 0.3)) * Math.cos(k * r - omega * t) * Math.exp(-0.12 * r);
+                            numSources++;
+                        }
+                    });
+                    y = numSources > 0 ? sum : 0;
+                }
+            }
+            return y;
+        }
+
+        function getSlitCenters() {
+            if (STATE.mode === 'diffraction_single') return [0];
+            if (STATE.mode === 'diffraction_double') return [-STATE.separation / 2, STATE.separation / 2];
+            return [];
+        }
+
+        // --- 3D SNELL'S LAW VECTOR REFRACTION RAY TRACER ---
+        function computeRayRefraction(x, z, t, lightDir, nWater) {
+            const delta = 0.05;
+            const y0 = getWaterHeight(x, z, t);
+            const yDx = getWaterHeight(x + delta, z, t);
+            const yDz = getWaterHeight(x, z + delta, t);
+
+            // Compute surface gradients dz/dx and dz/dz
+            const gx = (yDx - y0) / delta;
+            const gz = (yDz - y0) / delta;
+
+            // Surface normal N = (-gx, 1, -gz) normalized
+            const lenN = Math.sqrt(gx * gx + 1.0 + gz * gz);
+            const Nx = -gx / lenN;
+            const Ny = 1.0 / lenN;
+            const Nz = -gz / lenN;
+
+            // Incident Direction I
+            const Ix = lightDir.x;
+            const Iy = lightDir.y;
+            const Iz = lightDir.z;
+
+            // Dot product I . N
+            let cosTheta1 = -(Ix * Nx + Iy * Ny + Iz * Nz);
+            let normalX = Nx, normalY = Ny, normalZ = Nz;
+            if (cosTheta1 < 0) {
+                normalX = -Nx; normalY = -Ny; normalZ = -Nz;
+                cosTheta1 = -cosTheta1;
+            }
+
+            const eta = 1.0 / nWater;
+            const sin2Theta2 = eta * eta * (1.0 - cosTheta1 * cosTheta1);
+
+            let Rx, Ry, Rz;
+            if (sin2Theta2 > 1.0) {
+                // Total Internal Reflection
+                Rx = Ix + 2 * cosTheta1 * normalX;
+                Ry = Iy + 2 * cosTheta1 * normalY;
+                Rz = Iz + 2 * cosTheta1 * normalZ;
+            } else {
+                const cosTheta2 = Math.sqrt(1.0 - sin2Theta2);
+                const factor = eta * cosTheta1 - cosTheta2;
+                Rx = eta * Ix + factor * normalX;
+                Ry = eta * Iy + factor * normalY;
+                Rz = eta * Iz + factor * normalZ;
+            }
+
+            const lenR = Math.sqrt(Rx * Rx + Ry * Ry + Rz * Rz);
+            Rx /= lenR; Ry /= lenR; Rz /= lenR;
+
+            // Trace down to bottom screen Y = -3.5
+            const tRay = (Y_SCREEN - y0) / Ry;
+            const xHit = x + tRay * Rx;
+            const zHit = z + tRay * Rz;
+
+            return {
+                surfPos: { x, y: y0, z },
+                hitPos: { x: xHit, y: Y_SCREEN, z: zHit },
+                normal: { x: normalX, y: normalY, z: normalZ },
+                theta1: Math.acos(Math.min(1.0, cosTheta1)) * (180 / Math.PI),
+                theta2: Math.asin(Math.min(1.0, Math.sqrt(Math.max(0, sin2Theta2)))) * (180 / Math.PI),
+                curvature: (yDx + yDz - 2 * y0) / (delta * delta)
+            };
+        }
+
+        // --- UPDATE MESHES & RAYS IN ANIMATION LOOP ---
+        function updateWaterSurface(t) {
+            const posAttr = waterGeo.attributes.position;
+            const vertex = new THREE.Vector3();
+
+            for (let i = 0; i < posAttr.count; i++) {
+                vertex.fromBufferAttribute(posAttr, i);
+                const y = getWaterHeight(vertex.x, vertex.z, t);
+                posAttr.setY(i, y);
+            }
+            posAttr.needsUpdate = true;
+            waterGeo.computeVertexNormals();
+        }
+
+        function updateVibratorAndBarriers(t) {
+            // Update Linear Vibrator Bar
+            if (STATE.mode === 'linear') {
+                vibratorBarMesh.visible = STATE.showVibrator;
+                pointSource1.visible = false;
+                pointSource2.visible = false;
+                vibratorBarMesh.position.set(-4.0, STATE.amplitude * Math.sin(2 * Math.PI * STATE.frequency * t), 0);
+            } else if (STATE.mode === 'single') {
+                vibratorBarMesh.visible = false;
+                pointSource1.visible = STATE.showVibrator;
+                pointSource2.visible = false;
+                pointSource1.position.set(0, STATE.amplitude * Math.sin(2 * Math.PI * STATE.frequency * t) + 0.2, 0);
+            } else if (STATE.mode === 'double') {
+                vibratorBarMesh.visible = false;
+                pointSource1.visible = STATE.showVibrator;
+                pointSource2.visible = STATE.showVibrator;
+                const sy = STATE.amplitude * Math.sin(2 * Math.PI * STATE.frequency * t) + 0.2;
+                pointSource1.position.set(0, sy, -STATE.separation / 2);
+                pointSource2.position.set(0, sy, STATE.separation / 2);
+            } else {
+                vibratorBarMesh.visible = STATE.showVibrator;
+                pointSource1.visible = false;
+                pointSource2.visible = false;
+                vibratorBarMesh.position.set(-4.0, STATE.amplitude * Math.sin(2 * Math.PI * STATE.frequency * t), 0);
+            }
+
+            // Update Barrier Slit Meshes
+            barrierGroup.clear();
+            if (STATE.showBarriers && (STATE.mode === 'diffraction_single' || STATE.mode === 'diffraction_double')) {
+                const w = STATE.slitWidth;
+                const xB = -1.0;
+                const depth = 0.2;
+                const height = 0.8;
+
+                if (STATE.mode === 'diffraction_single') {
+                    // Block 1 (Top) & Block 2 (Bottom)
+                    const len1 = (WATER_SIZE / 2) - (w / 2);
+                    const b1Geo = new THREE.BoxGeometry(depth, height, len1);
+                    const b1 = new THREE.Mesh(b1Geo, barrierMat);
+                    b1.position.set(xB, 0.2, (WATER_SIZE / 2 + w / 2) / 2);
+
+                    const b2 = new THREE.Mesh(b1Geo, barrierMat);
+                    b2.position.set(xB, 0.2, -(WATER_SIZE / 2 + w / 2) / 2);
+
+                    barrierGroup.add(b1, b2);
+                } else if (STATE.mode === 'diffraction_double') {
+                    const sep = STATE.separation;
+                    // Center Block
+                    const centerLen = sep - w;
+                    if (centerLen > 0) {
+                        const cbGeo = new THREE.BoxGeometry(depth, height, centerLen);
+                        const cb = new THREE.Mesh(cbGeo, barrierMat);
+                        cb.position.set(xB, 0.2, 0);
+                        barrierGroup.add(cb);
+                    }
+                    // Outer Blocks
+                    const outerLen = (WATER_SIZE / 2) - (sep / 2 + w / 2);
+                    if (outerLen > 0) {
+                        const obGeo = new THREE.BoxGeometry(depth, height, outerLen);
+                        const ob1 = new THREE.Mesh(obGeo, barrierMat);
+                        ob1.position.set(xB, 0.2, (WATER_SIZE / 2 + (sep / 2 + w / 2)) / 2);
+
+                        const ob2 = new THREE.Mesh(obGeo, barrierMat);
+                        ob2.position.set(xB, 0.2, -(WATER_SIZE / 2 + (sep / 2 + w / 2)) / 2);
+                        barrierGroup.add(ob1, ob2);
+                    }
+                }
+            }
+        }
+
+        function updateRaysAndCaustics(t) {
+            const N = parseInt(STATE.rayDensity);
+            const totalRays = N * N;
+
+            // Incident Light Ray Angle Direction Vector
+            const radAngle = (STATE.lightAngle * Math.PI) / 180;
+            const lightDir = new THREE.Vector3(Math.sin(radAngle), -Math.cos(radAngle), 0).normalize();
+
+            const posAttr = lightRaySegments.geometry.attributes.position;
+            const colAttr = lightRaySegments.geometry.attributes.color;
+
+            // Clear Caustics Screen Canvas
+            causticsCtx.fillStyle = '#050c1a';
+            causticsCtx.fillRect(0, 0, 512, 512);
+
+            let rayIndex = 0;
+            const step = WATER_SIZE / (N + 1);
+
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < N; j++) {
+                    const x = -WATER_SIZE / 2 + step * (i + 1);
+                    const z = -WATER_SIZE / 2 + step * (j + 1);
+
+                    const rayData = computeRayRefraction(x, z, t, lightDir, STATE.nWater);
+
+                    // 1. Incident Ray: Sky (y=4) to Surface
+                    const skyX = x - lightDir.x * (4.0 - rayData.surfPos.y);
+                    const skyZ = z - lightDir.z * (4.0 - rayData.surfPos.y);
+
+                    const idx = rayIndex * 12;
+
+                    // Vertices: Incident Segment
+                    if (STATE.showIncRays) {
+                        posAttr.array[idx] = skyX;
+                        posAttr.array[idx + 1] = 4.0;
+                        posAttr.array[idx + 2] = skyZ;
+
+                        posAttr.array[idx + 3] = rayData.surfPos.x;
+                        posAttr.array[idx + 4] = rayData.surfPos.y;
+                        posAttr.array[idx + 5] = rayData.surfPos.z;
+                    } else {
+                        posAttr.array[idx] = posAttr.array[idx+1] = posAttr.array[idx+2] = 0;
+                        posAttr.array[idx+3] = posAttr.array[idx+4] = posAttr.array[idx+5] = 0;
+                    }
+
+                    // Vertices: Refracted Segment
+                    if (STATE.showRefRays) {
+                        posAttr.array[idx + 6] = rayData.surfPos.x;
+                        posAttr.array[idx + 7] = rayData.surfPos.y;
+                        posAttr.array[idx + 8] = rayData.surfPos.z;
+
+                        posAttr.array[idx + 9] = rayData.hitPos.x;
+                        posAttr.array[idx + 10] = rayData.hitPos.y;
+                        posAttr.array[idx + 11] = rayData.hitPos.z;
+                    } else {
+                        posAttr.array[idx+6] = posAttr.array[idx+7] = posAttr.array[idx+8] = 0;
+                        posAttr.array[idx+9] = posAttr.array[idx+10] = posAttr.array[idx+11] = 0;
+                    }
+
+                    // Colors
+                    // Incident: Cyan semi-transparent
+                    colAttr.array[idx] = 0.2; colAttr.array[idx + 1] = 0.7; colAttr.array[idx + 2] = 1.0;
+                    colAttr.array[idx + 3] = 0.2; colAttr.array[idx + 4] = 0.7; colAttr.array[idx + 5] = 1.0;
+
+                    // Refracted: Bright Yellow
+                    colAttr.array[idx + 6] = 0.98; colAttr.array[idx + 7] = 0.8; colAttr.array[idx + 8] = 0.2;
+                    colAttr.array[idx + 9] = 0.98; colAttr.array[idx + 10] = 0.8; colAttr.array[idx + 11] = 0.2;
+
+                    // Accumulate light spots on Caustics Canvas
+                    if (STATE.showCaustics) {
+                        const u = ((rayData.hitPos.x + WATER_SIZE / 2) / WATER_SIZE) * 512;
+                        const v = ((rayData.hitPos.z + WATER_SIZE / 2) / WATER_SIZE) * 512;
+
+                        if (u >= 0 && u < 512 && v >= 0 && v < 512) {
+                            causticsCtx.fillStyle = 'rgba(180, 240, 255, 0.18)';
+                            causticsCtx.beginPath();
+                            causticsCtx.arc(u, v, Math.max(2, 25 / N), 0, Math.PI * 2);
+                            causticsCtx.fill();
+                        }
+                    }
+
+                    rayIndex++;
+                    if (rayIndex >= maxRaysCount) break;
+                }
+                if (rayIndex >= maxRaysCount) break;
+            }
+
+            // Hide unused ray segments
+            for (let k = rayIndex * 12; k < maxRaysCount * 12; k++) {
+                posAttr.array[k] = 0;
+            }
+
+            posAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
+            causticsTexture.needsUpdate = true;
+        }
+
+        function updateProbeAndHUD(t) {
+            const px = STATE.probePos.x;
+            const pz = STATE.probePos.z;
+
+            probeGroup.visible = STATE.showProbe;
+            if (STATE.showProbe) {
+                const py = getWaterHeight(px, pz, t);
+                probeGroup.position.set(px, py, pz);
+
+                const lightDir = new THREE.Vector3(0, -1, 0);
+                const rayData = computeRayRefraction(px, pz, t, lightDir, STATE.nWater);
+
+                document.getElementById('probe-pos').innerText = `X: ${px.toFixed(2)}, Z: ${pz.toFixed(2)}`;
+                document.getElementById('probe-height').innerText = `${py >= 0 ? '+' : ''}${py.toFixed(3)} m`;
+                document.getElementById('probe-inc').innerText = `${rayData.theta1.toFixed(1)}°`;
+                document.getElementById('probe-ref').innerText = `${rayData.theta2.toFixed(1)}°`;
+
+                const curv = rayData.curvature;
+                const curvEl = document.getElementById('probe-curvature');
+                if (curv < -0.3) {
+                    curvEl.innerText = "Crest (Convex Focal Focus)";
+                    curvEl.className = "font-semibold text-amber-300";
+                } else if (curv > 0.3) {
+                    curvEl.innerText = "Trough (Concave Defocus)";
+                    curvEl.className = "font-semibold text-cyan-300";
+                } else {
+                    curvEl.innerText = "Flat / Inflection";
+                    curvEl.className = "font-semibold text-slate-300";
+                }
+            }
+        }
+
+        // --- 2D SIDE WAVE PROFILE SLICE CANVAS RENDERER ---
+        const sliceCanvas = document.getElementById('slice-canvas');
+        const sliceCtx = sliceCanvas.getContext('2d');
+
+        function renderSliceCanvas(t) {
+            const w = sliceCanvas.width;
+            const h = sliceCanvas.height;
+            const pz = STATE.probePos.z;
+
+            sliceCtx.fillStyle = '#070b14';
+            sliceCtx.fillRect(0, 0, w, h);
+
+            // Draw Air / Water regions
+            const yWaterPixelRest = h * 0.4;
+            const yScreenPixel = h * 0.88;
+
+            // Draw Screen Line
+            sliceCtx.strokeStyle = '#38bdf8';
+            sliceCtx.lineWidth = 2;
+            sliceCtx.beginPath();
+            sliceCtx.moveTo(0, yScreenPixel);
+            sliceCtx.lineTo(w, yScreenPixel);
+            sliceCtx.stroke();
+
+            // Water Region Wave Polygon
+            sliceCtx.fillStyle = 'rgba(0, 102, 153, 0.4)';
+            sliceCtx.strokeStyle = '#00f3ff';
+            sliceCtx.lineWidth = 1.5;
+
+            sliceCtx.beginPath();
+            sliceCtx.moveTo(0, yScreenPixel);
+
+            for (let px = 0; px <= w; px += 2) {
+                const worldX = -WATER_SIZE / 2 + (px / w) * WATER_SIZE;
+                const wy = getWaterHeight(worldX, pz, t);
+                const py = yWaterPixelRest - wy * 80; // Scale height visually
+                sliceCtx.lineTo(px, py);
+            }
+
+            sliceCtx.lineTo(w, yScreenPixel);
+            sliceCtx.closePath();
+            sliceCtx.fill();
+            sliceCtx.stroke();
+
+            // Trace 15 2D Rays across the slice
+            const numSliceRays = 16;
+            const lightDir = new THREE.Vector3(0, -1, 0);
+
+            sliceCtx.lineWidth = 1;
+            for (let r = 0; r < numSliceRays; r++) {
+                const rx = (r + 0.5) * (w / numSliceRays);
+                const worldX = -WATER_SIZE / 2 + (rx / w) * WATER_SIZE;
+
+                const rayData = computeRayRefraction(worldX, pz, t, lightDir, STATE.nWater);
+
+                const surfY = yWaterPixelRest - rayData.surfPos.y * 80;
+                const hitX = ((rayData.hitPos.x + WATER_SIZE / 2) / WATER_SIZE) * w;
+
+                // Incident Ray
+                sliceCtx.strokeStyle = 'rgba(56, 189, 248, 0.5)';
+                sliceCtx.beginPath();
+                sliceCtx.moveTo(rx, 5);
+                sliceCtx.lineTo(rx, surfY);
+                sliceCtx.stroke();
+
+                // Refracted Ray
+                sliceCtx.strokeStyle = 'rgba(250, 204, 21, 0.8)';
+                sliceCtx.beginPath();
+                sliceCtx.moveTo(rx, surfY);
+                sliceCtx.lineTo(hitX, yScreenPixel);
+                sliceCtx.stroke();
+
+                // Bright spot on floor
+                sliceCtx.fillStyle = '#facc15';
+                sliceCtx.beginPath();
+                sliceCtx.arc(hitX, yScreenPixel, 2, 0, Math.PI * 2);
+                sliceCtx.fill();
+            }
+        }
+
+        // --- INTERACTIVE RAYCASTING FOR PROBE ---
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        window.addEventListener('pointerdown', (e) => {
+            // Avoid clicking UI elements
+            if (e.target.closest('#sidebar') || e.target.closest('#probe-hud') || e.target.closest('#slice-container') || e.target.closest('.glass-panel')) return;
+
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObject(waterMesh);
+
+            if (intersects.length > 0) {
+                const pt = intersects[0].point;
+                STATE.probePos.x = Math.max(-WATER_SIZE / 2, Math.min(WATER_SIZE / 2, pt.x));
+                STATE.probePos.z = Math.max(-WATER_SIZE / 2, Math.min(WATER_SIZE / 2, pt.z));
+            }
+        });
+
+        // --- KATEX MATH RENDERING ---
+        function renderMathFormulas() {
+            katex.render("v = f \\lambda", document.getElementById('math-speed'), { throwOnError: false });
+            katex.render("n_1 \\sin\\theta_1 = n_2 \\sin\\theta_2", document.getElementById('math-snell'), { throwOnError: false });
+            katex.render("f_{\\text{lens}} \\approx \\frac{R}{n - 1}", document.getElementById('math-lens'), { throwOnError: false });
+            katex.render("\\Delta x = |S_1 P - S_2 P| = m\\lambda", document.getElementById('math-interf'), { throwOnError: false });
+        }
+        renderMathFormulas();
+
+        // --- UI EVENT LISTENERS & BINDINGS ---
+        // Play / Pause
+        const btnPlay = document.getElementById('btn-play-pause');
+        const iconPlay = document.getElementById('icon-play-pause');
+        btnPlay.addEventListener('click', () => {
+            STATE.isPlaying = !STATE.isPlaying;
+            iconPlay.className = STATE.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
+        });
+
+        // Reset Time
+        document.getElementById('btn-reset').addEventListener('click', () => { STATE.time = 0; });
+
+        // Speed
+        const sliderSpeed = document.getElementById('slider-speed');
+        sliderSpeed.addEventListener('input', (e) => {
+            STATE.speed = parseFloat(e.target.value);
+            document.getElementById('txt-speed').innerText = `${STATE.speed.toFixed(1)}x`;
+        });
+
+        // Camera Presets
+        document.getElementById('cam-iso').addEventListener('click', () => {
+            camera.position.set(0, 7.5, 9.5);
+            controls.target.set(0, -0.5, 0);
+        });
+        document.getElementById('cam-top').addEventListener('click', () => {
+            camera.position.set(0, 12, 0.01);
+            controls.target.set(0, 0, 0);
+        });
+        document.getElementById('cam-side').addEventListener('click', () => {
+            camera.position.set(0, 0.5, 11);
+            controls.target.set(0, -1, 0);
+        });
+
+        // Mode Selector Buttons
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => {
+                    b.classList.remove('active', 'border-cyan-500/50', 'text-cyan-300');
+                    b.classList.add('text-slate-300');
+                });
+                btn.classList.add('active', 'border-cyan-500/50', 'text-cyan-300');
+
+                STATE.mode = btn.dataset.mode;
+
+                // Show/hide relevant sliders
+                document.getElementById('ctrl-separation').classList.toggle('hidden', STATE.mode !== 'double' && STATE.mode !== 'diffraction_double');
+                document.getElementById('ctrl-slit').classList.toggle('hidden', STATE.mode !== 'diffraction_single' && STATE.mode !== 'diffraction_double');
+            });
+        });
+
+        // Sliders
+        const bindSlider = (id, txtId, stateKey, unit = '') => {
+            document.getElementById(id).addEventListener('input', (e) => {
+                STATE[stateKey] = parseFloat(e.target.value);
+                document.getElementById(txtId).innerText = `${STATE[stateKey].toFixed(2)}${unit}`;
+            });
+        };
+        bindSlider('slider-freq', 'txt-freq', 'frequency', ' Hz');
+        bindSlider('slider-lambda', 'txt-lambda', 'wavelength', ' m');
+        bindSlider('slider-amp', 'txt-amp', 'amplitude', ' m');
+        bindSlider('slider-sep', 'txt-sep', 'separation', ' m');
+        bindSlider('slider-slit', 'txt-slit', 'slitWidth', ' m');
+        bindSlider('slider-index', 'txt-index', 'nWater', '');
+
+        document.getElementById('slider-angle').addEventListener('input', (e) => {
+            STATE.lightAngle = parseFloat(e.target.value);
+            document.getElementById('txt-angle').innerText = `${STATE.lightAngle.toFixed(1)}°`;
+        });
+
+        document.getElementById('select-density').addEventListener('change', (e) => {
+            STATE.rayDensity = parseInt(e.target.value);
+        });
+
+        // Checkboxes
+        const bindCheck = (id, stateKey, onChange) => {
+            document.getElementById(id).addEventListener('change', (e) => {
+                STATE[stateKey] = e.target.checked;
+                if (onChange) onChange();
+            });
+        };
+        bindCheck('chk-inc-rays', 'showIncRays');
+        bindCheck('chk-ref-rays', 'showRefRays');
+        bindCheck('chk-water', 'showWater', () => { waterMesh.visible = STATE.showWater; wireMesh.visible = STATE.showWater; });
+        bindCheck('chk-caustics', 'showCaustics', () => { causticsMesh.visible = STATE.showCaustics; });
+        bindCheck('chk-vibrator', 'showVibrator');
+        bindCheck('chk-probe', 'showProbe');
+        bindCheck('chk-barriers', 'showBarriers');
+
+        // Sidebar Tabs Navigation
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
+
+                btn.classList.add('active');
+                document.getElementById(btn.dataset.tab).classList.remove('hidden');
+            });
+        });
+
+        // Toggle Sidebar Drawer
+        const sidebar = document.getElementById('sidebar');
+        document.getElementById('btn-toggle-sidebar').addEventListener('click', () => {
+            sidebar.classList.toggle('-translate-x-[calc(100%+1rem)]');
+        });
+
+        // Resize Handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- ANIMATION LOOP ---
+        let lastTime = performance.now();
+
+        function animate(currentTime) {
+            requestAnimationFrame(animate);
+
+            const dt = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            if (STATE.isPlaying) {
+                STATE.time += dt * STATE.speed;
+            }
+
+            // Physics Updates
+            updateWaterSurface(STATE.time);
+            updateVibratorAndBarriers(STATE.time);
+            updateRaysAndCaustics(STATE.time);
+            updateProbeAndHUD(STATE.time);
+            renderSliceCanvas(STATE.time);
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Start Animation on Load
+        window.onload = () => {
+            animate(performance.now());
+        };
+    </script>
+</body>
+</html>
