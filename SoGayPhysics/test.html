@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D 流體波動與光折射模擬</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+        }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 8px;
+            pointer-events: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            max-width: 300px;
+        }
+        h1 { font-size: 16px; margin: 0 0 10px 0; color: #4fa8ff; }
+        p { font-size: 12px; margin: 5px 0; line-height: 1.4; color: #ccc; }
+        .highlight { color: #00ffcc; font-weight: bold; }
+    </style>
+    <!-- 引入 Three.js 與 OrbitControls -->
+    <script src="https://cloudflare.com"></script>
+    <script src="https://jsdelivr.net"></script>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h1>3D 流體波動與折射模擬</h1>
+        <p>🟢 <b>藍色網格：</b>動態動能水面</p>
+        <p>🔴 <b>紅色射線：</b>入射光 (空氣 $n_1 = 1.0$)</p>
+        <p>🟡 <b>黃色射線：</b>折射光 (水體 $n_2 = 1.33$)</p>
+        <p>🟢 <b>綠色虛線：</b>法線 (隨波面法向量動態改變)</p>
+        <p>🖱️ <b>旋轉視角：</b>滑鼠左鍵拖曳</p>
+        <p>🔍 <b>縮放：</b>滑鼠滾輪</p>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <script>
+        // --- 1. 基本場景設定 ---
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x050505);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 8, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- 2. 燈光配置 ---
+        const ambientLight = new THREE.AmbientLight(0x333333);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight.position.set(5, 15, 5);
+        scene.add(dirLight);
+
+        // --- 3. 建立水面 (流體波動) ---
+        const waveSize = 10;
+        const waveSegments = 60;
+        // 使用 PlaneGeometry 作為水面網格
+        const waveGeometry = new THREE.PlaneGeometry(waveSize, waveSize, waveSegments, waveSegments);
+        waveGeometry.rotateX(-Math.PI / 2); // 旋轉使水平面朝上
+
+        // 材質：半透明藍色，雙面渲染
+        const waveMaterial = new THREE.MeshPhongMaterial({
+            color: 0x0066ff,
+            transparent: true,
+            opacity: 0.6,
+            wireframe: true,
+            side: THREE.DoubleSide
+        });
+        const waveMesh = new THREE.Mesh(waveGeometry, waveMaterial);
+        scene.add(waveMesh);
+
+        // 水底參考面 (用來看折射光投射位置)
+        const floorGeo = new THREE.PlaneGeometry(waveSize, waveSize);
+        floorGeo.rotateX(-Math.PI / 2);
+        const floorMat = new THREE.MeshPhongMaterial({ color: 0x222222, side: THREE.DoubleSide });
+        const floorMesh = new THREE.Mesh(floorGeo, floorMat);
+        floorMesh.position.y = -4; // 水深為 4 單位
+        scene.add(floorMesh);
+
+        // --- 4. 光線視覺化元件 ---
+        // 入射光 (紅)
+        const incidentGeo = new THREE.BufferGeometry();
+        const incidentMat = new THREE.LineBasicMaterial({ color: 0xff3333, linewidth: 2 });
+        const incidentLine = new THREE.Line(incidentGeo, incidentMat);
+        scene.add(incidentLine);
+
+        // 折射光 (黃)
+        const refractGeo = new THREE.BufferGeometry();
+        const refractMat = new THREE.LineBasicMaterial({ color: 0xffff33, linewidth: 2 });
+        const refractLine = new THREE.Line(refractGeo, refractMat);
+        scene.add(refractLine);
+
+        // 法線 (綠)
+        const normalGeo = new THREE.BufferGeometry();
+        const normalMat = new THREE.LineDashedMaterial({ color: 0x33ff33, dashSize: 0.2, gapSize: 0.1 });
+        const normalLine = new THREE.Line(normalGeo, normalMat);
+        scene.add(normalLine);
+
+        // 入射光起點 (固定在空中某處)
+        const lightSource = new THREE.Vector3(-3, 5, 0); 
+        // 固定入射光瞄準的水平目標點 (會隨波浪上下起伏)
+        const targetTarget = new THREE.Vector3(0, 0, 0);
+
+        // --- 5. 波動物理物理公式與折射計算 ---
+        const clock = new THREE.Clock();
+
+        // 模擬參數
+        const n1 = 1.00; // 空氣折射率
+        const n2 = 1.33; // 水的折射率
+
+        function updateSimulation() {
+            const t = clock.getElapsedTime();
+            const posAttr = waveGeometry.attributes.position;
+            
+            // 5a. 動態更新水面頂點 (Gerstner Wave / 正弦波疊加簡化版)
+            for (let i = 0; i < posAttr.count; i++) {
+                let x = posAttr.getX(i);
+                let z = posAttr.getZ(i);
+
+                // 疊加兩個方向不同的正弦波來製造流體混亂感
+                let y1 = Math.sin(x * 1.0 + t * 2.0) * 0.3;
+                let y2 = Math.cos(z * 1.5 + t * 2.5) * 0.2;
+                let y = y1 + y2;
+
+                posAttr.setY(i, y);
+            }
+            waveGeometry.computeVertexNormals(); // 重新計算頂點法向量以利折射與光照
+            posAttr.needsUpdate = true;
+
+            // 5b. 尋找入射點 (這裡簡化為射向 (0, z) 尋找當前波動高度)
+            // 精確做法是用 Raycaster 投射，這裡直接計算 (0,0) 位置的波動高度
+            let intersectX = 0;
+            let intersectZ = 0;
+            let intersectY = Math.sin(intersectX * 1.0 + t * 2.0) * 0.3 + Math.cos(intersectZ * 1.5 + t * 2.5) * 0.2;
+            const intersectionPoint = new THREE.Vector3(intersectX, intersectY, intersectZ);
+
+            // 5c. 計算該點的法向量 (Normal)
+            // 透過偏微分估算表面斜率與法向量
+            let dfdx = 1.0 * 0.3 * Math.cos(intersectX * 1.0 + t * 2.0);
+            let dfdz = -1.5 * 0.2 * Math.sin(intersectZ * 1.5 + t * 2.5);
+            // 表面切線向量產生的法向量
+            const normal = new THREE.Vector3(-dfdx, 1, -dfdz).normalize();
+
+            // 5d. 計算折射光線 (Snell's Law)
+            // 入射向量 (從光源指向交點)
+            const incidentDir = new THREE.Vector3().subVectors(intersectionPoint, lightSource).normalize();
+            
+            // 使用 Three.js 內建的折射公式 (Refract)
+            const refractDir = incidentDir.clone().refract(normal, n1 / n2);
+
+            // 5e. 計算折射光與水底的交點
+            // 水底在 y = -4
+            let t_floor = (-4 - intersectionPoint.y) / refractDir.y;
+            const floorIntersection = new THREE.Vector3().copy(intersectionPoint).addScaledVector(refractDir, t_floor);
+
+            // --- 6. 更新 3D 射線視覺線段 ---
+            // 入射光線段
+            incidentGeo.setFromPoints([lightSource, intersectionPoint]);
+            // 法線線段 (向上延伸 2 單位，向下延伸 2 單位)
+            const normalStart = intersectionPoint.clone().addScaledVector(normal, 2);
+            const normalEnd = intersectionPoint.clone().addScaledVector(normal, -2);
+            normalGeo.setFromPoints([normalStart, normalEnd]);
+            normalLine.computeLineDistances(); // 虛線需要計算距離
+
+            // 折射光線段 (從交點到水底)
+            refractGeo.setFromPoints([intersectionPoint, floorIntersection]);
+        }
+
+        // --- 7. 動畫迴圈 ---
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            updateSimulation();
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // --- 8. 視窗縮放處理 ---
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // 啟動動畫
+        animate();
+    </script>
+</body>
+</html>
