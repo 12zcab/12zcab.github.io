@@ -1,321 +1,343 @@
 <!DOCTYPE html>
-<html lang="zh-HK">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>HKDSE 物理：3D 流體波動與光折射模擬器</title>
-    <!-- MathJax 用於數學公式渲染 -->
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <!-- Three.js 3D 引擎與軌道控制器 -->
+    <title>HKDSE Physics: 3D Wave Motion & Light Refraction Simulator</title>
+    
+    <!-- MathJax Configuration for LaTeX Rendering -->
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['[', ']']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    
+    <!-- Three.js 3D Engine & OrbitControls -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         body, html { width: 100%; height: 100%; overflow: hidden; background-color: #0b0f19; color: #e2e8f0; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* 響應式面板 UI */
+        /* UI Glassmorphism Panels */
         .ui-panel {
             position: absolute;
             z-index: 10;
-            background: rgba(15, 23, 42, 0.85);
+            background: rgba(15, 23, 42, 0.88);
             backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: 12px;
             padding: 16px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
             max-height: 90vh;
             overflow-y: auto;
-            transition: all 0.3s ease;
         }
 
-        /* 電腦端佈局 */
+        /* Responsive Layouts for Desktop vs iPad/Mobile */
         @media (min-width: 768px) {
             #controls-panel { top: 20px; left: 20px; width: 340px; }
-            #dse-info-panel { top: 20px; right: 20px; width: 360px; }
+            #dse-info-panel { top: 20px; right: 20px; width: 380px; }
         }
-        /* 移動端/iPad 佈局 */
         @media (max-width: 767px) {
             .ui-panel { width: calc(100vw - 30px); left: 15px; right: 15px; }
-            #controls-panel { top: 15px; max-height: 45vh; }
-            #dse-info-panel { bottom: 15px; max-height: 40vh; }
-            .toggle-btn { display: block; }
+            #controls-panel { top: 15px; max-height: 48vh; }
+            #dse-info-panel { bottom: 15px; max-height: 42vh; }
         }
 
-        h2 { font-size: 1.1rem; color: #38bdf8; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; }
-        h3 { font-size: 0.95rem; color: #f43f5e; margin: 10px 0 6px; border-left: 3px solid #f43f5e; padding-left: 6px; }
+        h2 { font-size: 1.05rem; color: #38bdf8; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        h3 { font-size: 0.9rem; color: #f43f5e; margin: 12px 0 6px; border-left: 3px solid #f43f5e; padding-left: 6px; }
         
-        .control-group { margin-bottom: 12px; }
-        .control-group label { display: flex; justify-content: space-between; font-size: 0.85rem; color: #cbd5e1; margin-bottom: 4px; }
+        .control-group { margin-bottom: 10px; }
+        .control-group label { display: flex; justify-content: space-between; font-size: 0.82rem; color: #cbd5e1; margin-bottom: 4px; }
         .control-group input[type="range"] { width: 100%; accent-color: #38bdf8; cursor: pointer; }
 
-        /* 隱藏/顯示清單 Checklist */
-        .checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 8px; }
-        .check-item { display: flex; align-items: center; font-size: 0.8rem; cursor: pointer; color: #94a3b8; }
+        /* Feature Visibility Checklist */
+        .checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; background: rgba(0,0,0,0.25); padding: 8px; border-radius: 8px; }
+        .check-item { display: flex; align-items: center; font-size: 0.78rem; cursor: pointer; color: #94a3b8; }
         .check-item input { margin-right: 6px; accent-color: #38bdf8; }
 
-        /* DSE 數據與公式計算 */
-        .calc-box { background: rgba(30, 41, 59, 0.7); padding: 10px; border-radius: 8px; font-size: 0.85rem; line-height: 1.5; margin-top: 8px; }
-        .calc-row { display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,0.08); pb: 2px; }
+        /* Calculation & Concept Display Boxes */
+        .calc-box { background: rgba(30, 41, 59, 0.75); padding: 10px; border-radius: 8px; font-size: 0.82rem; line-height: 1.5; margin-top: 6px; }
+        .calc-row { display: flex; justify-content: space-between; margin-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,0.08); padding-bottom: 2px; }
         .highlight { color: #facc15; font-weight: bold; }
-        .alert-tir { color: #ef4444; font-weight: bold; animation: pulse 1.5s infinite; }
+        .alert-tir { color: #ef4444; font-weight: bold; }
 
-        /* 3D 浮動標籤 */
+        /* 3D Label Styling */
         .label-3d {
             position: absolute;
             z-index: 5;
             color: #ffffff;
-            font-size: 12px;
-            font-weight: bold;
+            font-size: 11px;
+            font-weight: 600;
             padding: 2px 6px;
-            background: rgba(0, 0, 0, 0.65);
-            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(255, 255, 255, 0.25);
             border-radius: 4px;
             pointer-events: none;
             transform: translate(-50%, -50%);
-            transition: opacity 0.2s;
         }
-
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
     </style>
 </head>
 <body>
 
     <div id="canvas-container"></div>
 
-    <!-- 3D 動態空間標籤 -->
-    <div id="label-theta1" class="label-3d">θ₁</div>
-    <div id="label-theta2" class="label-3d">θ₂</div>
-    <div id="label-n1" class="label-3d">介質 1 (n₁)</div>
-    <div id="label-n2" class="label-3d">介質 2 (n₂)</div>
-    <div id="label-apparent" class="label-3d">表觀深度 d'</div>
+    <!-- 3D Spatial Labels -->
+    <div id="label-theta1" class="label-3d">$\theta_1$</div>
+    <div id="label-theta2" class="label-3d">$\theta_2$</div>
+    <div id="label-n1" class="label-3d">Medium 1 ($n_1$)</div>
+    <div id="label-n2" class="label-3d">Medium 2 ($n_2$)</div>
+    <div id="label-apparent" class="label-3d">Apparent Depth $d'$</div>
 
-    <!-- 控制面板 -->
+    <!-- Control Panel -->
     <div id="controls-panel" class="ui-panel">
-        <h2>控制與參數調節 <span>⚙️</span></h2>
+        <h2>Controls & Parameters <span>⚙️</span></h2>
         
-        <!-- 物件顯示隱藏清單 -->
-        <h3>👁️ 物件/標識顯示清單</h3>
+        <h3>👁️ Object / Feature Checklist</h3>
         <div class="checklist">
-            <label class="check-item"><input type="checkbox" id="chk-wave" checked> 3D 水波網格</label>
-            <label class="check-item"><input type="checkbox" id="chk-rays" checked> 折射/反射光線</label>
-            <label class="check-item"><input type="checkbox" id="chk-normal" checked> 法線與界面</label>
-            <label class="check-item"><input type="checkbox" id="chk-wavefront" checked> 波陣面 (Huygens)</label>
-            <label class="check-item"><input type="checkbox" id="chk-depth" checked> 水下物體(表觀深度)</label>
-            <label class="check-item"><input type="checkbox" id="chk-labels" checked> 角度與名稱標記</label>
+            <label class="check-item"><input type="checkbox" id="chk-wave" checked> 3D Water Surface</label>
+            <label class="check-item"><input type="checkbox" id="chk-rays" checked> Light Rays</label>
+            <label class="check-item"><input type="checkbox" id="chk-normal" checked> Normal Line</label>
+            <label class="check-item"><input type="checkbox" id="chk-projection" checked> Light/Dark Fringes</label>
+            <label class="check-item"><input type="checkbox" id="chk-depth" checked> Apparent Depth</label>
+            <label class="check-item"><input type="checkbox" id="chk-labels" checked> 3D Labels</label>
         </div>
 
-        <!-- 物理參數滑塊 -->
-        <h3>微調物理參數</h3>
+        <h3>Adjust Physical Parameters</h3>
         <div class="control-group">
-            <label>介質 1 折射率 $n_1$: <span id="val-n1">1.00</span></label>
+            <label>Medium 1 Index ($n_1$): <span id="val-n1">1.00</span></label>
             <input type="range" id="slider-n1" min="1.00" max="2.50" step="0.01" value="1.00">
         </div>
         <div class="control-group">
-            <label>介質 2 折射率 $n_2$: <span id="val-n2">1.33</span></label>
+            <label>Medium 2 Index ($n_2$): <span id="val-n2">1.33</span></label>
             <input type="range" id="slider-n2" min="1.00" max="2.50" step="0.01" value="1.33">
         </div>
         <div class="control-group">
-            <label>入射角 $\theta_1$: <span id="val-theta1">45.0°</span></label>
+            <label>Angle of Incidence ($\theta_1$): <span id="val-theta1">45.0°</span></label>
             <input type="range" id="slider-theta1" min="0" max="85" step="0.5" value="45">
         </div>
         <div class="control-group">
-            <label>波浪頻率 $f$: <span id="val-freq">1.5 Hz</span></label>
+            <label>Wave Frequency ($f$): <span id="val-freq">1.5 Hz</span></label>
             <input type="range" id="slider-freq" min="0.5" max="4.0" step="0.1" value="1.5">
         </div>
         <div class="control-group">
-            <label>波浪振幅 $A$: <span id="val-amp">0.15 m</span></label>
-            <input type="range" id="slider-amp" min="0.02" max="0.4" step="0.01" value="0.15">
+            <label>Wave Amplitude ($A$): <span id="val-amp">0.15 m</span></label>
+            <input type="range" id="slider-amp" min="0.02" max="0.35" step="0.01" value="0.15">
         </div>
     </div>
 
-    <!-- DSE 考點與數學推導面板 -->
+    <!-- DSE Physics & Mathematical Derivations Panel -->
     <div id="dse-info-panel" class="ui-panel">
-        <h2>HKDSE 物理考點與算式 <span>📚</span></h2>
+        <h2>HKDSE Physics Concepts <span>📚</span></h2>
         
         <div class="calc-box">
-            <div class="calc-row"><span>斯涅爾定律 (Snell's Law):</span> <span>$n_1 \sin\theta_1 = n_2 \sin\theta_2$</span></div>
-            <div class="calc-row"><span>折射角 $\theta_2$:</span> <span id="out-theta2" class="highlight">32.1°</span></div>
-            <div class="calc-row"><span>全內反射臨界角 $\theta_c$:</span> <span id="out-thetac">N/A</span></div>
-            <div class="calc-row"><span>光/波狀態:</span> <span id="out-status" style="color:#4ade80;">正常折射 (Refraction)</span></div>
+            <div class="calc-row"><span>Snell's Law:</span> <span>$n_1 \sin\theta_1 = n_2 \sin\theta_2$</span></div>
+            <div class="calc-row"><span>Refraction Angle ($\theta_2$):</span> <span id="out-theta2" class="highlight">32.1°</span></div>
+            <div class="calc-row"><span>Critical Angle ($\theta_c$):</span> <span id="out-thetac">N/A</span></div>
+            <div class="calc-row"><span>Optical State:</span> <span id="out-status" style="color:#4ade80;">Refraction</span></div>
         </div>
 
-        <h3 style="border-color:#38bdf8; color:#38bdf8;">波動特性推導 ($v = f \lambda$)</h3>
+        <h3 style="border-color:#38bdf8; color:#38bdf8;">Ripple Tank: Lens Effect</h3>
         <div class="calc-box">
-            <div class="calc-row"><span>相對折射率 $\frac{n_2}{n_1}$:</span> <span id="out-rel-n">1.33</span></div>
-            <div class="calc-row"><span>介質 2 波速 $v_2 / v_1$:</span> <span id="out-v-ratio">0.75</span></div>
-            <div class="calc-row"><span>介質 2 波長 $\lambda_2 / \lambda_1$:</span> <span id="out-lambda-ratio">0.75</span></div>
-            <p style="font-size:0.75rem; color:#94a3b8; margin-top:4px;">* 註：當波進入光密介質 ($n_2 > n_1$)，頻率 $f$ 保持不變，波速 $v$ 與波長 $\lambda$ 按比例減小。</p>
+            <p style="margin-bottom: 6px; font-size: 0.8rem; color: #e2e8f0;">
+                When overhead light shines through a water wave:
+            </p>
+            <ul style="padding-left: 16px; font-size: 0.78rem; color: #cbd5e1; line-height: 1.4;">
+                <li><strong style="color:#facc15;">Wave Crest:</strong> Thicker water layer acts as a <strong>Convex Lens</strong> $\rightarrow$ Converges light $\rightarrow$ <span style="color:#facc15;">BRIGHT line</span> on screen.</li>
+                <li><strong style="color:#38bdf8;">Wave Trough:</strong> Thinner water layer acts as a <strong>Concave Lens</strong> $\rightarrow$ Diverges light $\rightarrow$ <span style="color:#94a3b8;">DARK line</span> on screen.</li>
+            </ul>
         </div>
 
-        <h3 style="border-color:#facc15; color:#facc15;">視深度 (Apparent Depth)</h3>
+        <h3 style="border-color:#a855f7; color:#a855f7;">Wave Properties ($v = f \lambda$)</h3>
         <div class="calc-box">
-            <div class="calc-row"><span>視深度公式:</span> <span>$d' = d \times \frac{n_1}{n_2}$</span></div>
-            <div class="calc-row"><span>真實深度 $d$:</span> <span>2.00 m</span></div>
-            <div class="calc-row"><span>表觀深度 $d'$:</span> <span id="out-apparent-depth" class="highlight">1.50 m</span></div>
+            <div class="calc-row"><span>Relative Index $\frac{n_2}{n_1}$:</span> <span id="out-rel-n">1.33</span></div>
+            <div class="calc-row"><span>Speed Ratio $\frac{v_2}{v_1}$:</span> <span id="out-v-ratio">0.75</span></div>
+            <div class="calc-row"><span>Wavelength Ratio $\frac{\lambda_2}{\lambda_1}$:</span> <span id="out-lambda-ratio">0.75</span></div>
+            <p style="font-size:0.73rem; color:#94a3b8; margin-top:4px;">* Frequency $f$ remains constant across different media.</p>
+        </div>
+
+        <h3 style="border-color:#facc15; color:#facc15;">Apparent Depth ($d'$)</h3>
+        <div class="calc-box">
+            <div class="calc-row"><span>Formula:</span> <span>$d' = d \times \left(\frac{n_1}{n_2}\right)$</span></div>
+            <div class="calc-row"><span>Real Depth ($d$):</span> <span>2.00 m</span></div>
+            <div class="calc-row"><span>Apparent Depth ($d'$):</span> <span id="out-apparent-depth" class="highlight">1.50 m</span></div>
         </div>
     </div>
 
     <script>
-        // --- 物理變數與設定 ---
+        // Physics Simulation State
         let params = {
             n1: 1.00,
             n2: 1.33,
-            theta1: 45 * Math.PI / 180, // radians
+            theta1: 45 * Math.PI / 180,
             freq: 1.5,
             amp: 0.15,
-            waveLength1: 1.2
+            waveLength1: 1.5
         };
 
-        // --- Three.js 場景初始化 ---
+        // Initialize Three.js Scene
         const container = document.getElementById('canvas-container');
         const scene = new THREE.Scene();
-        scene.fog = new THREE.FogExp2(0x0b0f19, 0.03);
+        scene.fog = new THREE.FogExp2(0x0b0f19, 0.035);
 
         const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 100);
-        camera.position.set(0, 4, 8);
+        camera.position.set(0, 4.5, 8.5);
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.shadowMap.enabled = true;
         container.appendChild(renderer.domElement);
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
-        controls.maxPolarAngle = Math.PI / 2 + 0.3; // 允許稍微看到下方
+        controls.maxPolarAngle = Math.PI / 2 + 0.25;
 
-        // 光源
+        // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(5, 10, 7);
         scene.add(dirLight);
 
-        // --- 3D 物件組裝 ---
+        // Scene Groups
         const waveGroup = new THREE.Group();
         const raysGroup = new THREE.Group();
         const normalGroup = new THREE.Group();
-        const wavefrontGroup = new THREE.Group();
+        const projectionGroup = new THREE.Group();
         const depthGroup = new THREE.Group();
+        
         scene.add(waveGroup);
         scene.add(raysGroup);
         scene.add(normalGroup);
-        scene.add(wavefrontGroup);
+        scene.add(projectionGroup);
         scene.add(depthGroup);
 
-        // 1. 流體水波網格
+        // 1. Water Mesh
         const gridXZ = 10;
-        const gridRes = 80;
+        const gridRes = 90;
         const waveGeo = new THREE.PlaneGeometry(gridXZ, gridXZ, gridRes, gridRes);
         waveGeo.rotateX(-Math.PI / 2);
+        
         const waveMat = new THREE.MeshPhongMaterial({
-            color: 0x00a8ff,
+            color: 0x0099ff,
             transparent: true,
-            opacity: 0.65,
-            wireframe: false,
+            opacity: 0.6,
             side: THREE.DoubleSide,
             shininess: 90
         });
         const waveMesh = new THREE.Mesh(waveGeo, waveMat);
         waveGroup.add(waveMesh);
 
-        // 下層介質半透明方塊
+        // Medium 2 Box
         const medium2Geo = new THREE.BoxGeometry(gridXZ, 4, gridXZ);
         const medium2Mat = new THREE.MeshPhongMaterial({
-            color: 0x003366,
+            color: 0x002244,
             transparent: true,
-            opacity: 0.3,
+            opacity: 0.25,
             depthWrite: false
         });
         const medium2Mesh = new THREE.Mesh(medium2Geo, medium2Mat);
         medium2Mesh.position.y = -2;
         waveGroup.add(medium2Mesh);
 
-        // 2. 法線與介面平面
+        // 2. Normal Line
         const normalGeo = new THREE.BufferGeometry().setFromPoints([
-            new THREE.Vector3(0, -3, 0),
-            new THREE.Vector3(0, 3, 0)
+            new THREE.Vector3(0, -3.5, 0),
+            new THREE.Vector3(0, 3.5, 0)
         ]);
         const normalMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.1, gapSize: 0.1 });
         const normalLine = new THREE.Line(normalGeo, normalMat);
         normalLine.computeLineDistances();
         normalGroup.add(normalLine);
 
-        // 3. 光線材質與箭頭
+        // 3. Rays
         function createRay(color) {
-            const geom = new THREE.CylinderGeometry(0.03, 0.03, 1, 16);
-            geom.translate(0, 0.5, 0); // 原點設在底部
+            const geom = new THREE.CylinderGeometry(0.025, 0.025, 1, 16);
+            geom.translate(0, 0.5, 0);
             const mat = new THREE.MeshBasicMaterial({ color: color });
             return new THREE.Mesh(geom, mat);
         }
-        const rayIncident = createRay(0xffeb3b); // 入射光 (黃)
-        const rayReflected = createRay(0xf44336); // 反射光 (紅)
-        const rayRefracted = createRay(0x00e676); // 折射光 (綠)
+        const rayIncident = createRay(0xffeb3b);  // Yellow
+        const rayReflected = createRay(0xef4444); // Red
+        const rayRefracted = createRay(0x10b981); // Green
         raysGroup.add(rayIncident);
         raysGroup.add(rayReflected);
         raysGroup.add(rayRefracted);
 
-        // 4. 表觀深度物件 (水下真實物體 vs 視覺物體)
-        const realObjGeo = new THREE.SphereGeometry(0.15, 16, 16);
-        const realObjMat = new THREE.MeshBasicMaterial({ color: 0xff0055 });
+        // 4. Projection Screen (Bright and Dark Lines from Crests/Troughs)
+        const projCanvas = document.createElement('canvas');
+        projCanvas.width = 512;
+        projCanvas.height = 512;
+        const projCtx = projCanvas.getContext('2d');
+        const projTexture = new THREE.CanvasTexture(projCanvas);
+        
+        const projGeo = new THREE.PlaneGeometry(gridXZ, gridXZ);
+        projGeo.rotateX(-Math.PI / 2);
+        const projMat = new THREE.MeshBasicMaterial({ map: projTexture, transparent: true, opacity: 0.85 });
+        const projMesh = new THREE.Mesh(projGeo, projMat);
+        projMesh.position.y = -3.98; // Positioned at bottom floor
+        projectionGroup.add(projMesh);
+
+        // Floor Frame
+        const floorFrame = new THREE.GridHelper(gridXZ, 10, 0x38bdf8, 0x1e293b);
+        floorFrame.position.y = -4.0;
+        projectionGroup.add(floorFrame);
+
+        // 5. Apparent Depth Sphere
+        const realObjGeo = new THREE.SphereGeometry(0.14, 16, 16);
+        const realObjMat = new THREE.MeshBasicMaterial({ color: 0xf43f5e });
         const realObj = new THREE.Mesh(realObjGeo, realObjMat);
-        realObj.position.set(0, -2, 0); // 真實深度 d = 2m
+        realObj.position.set(0, -2, 0);
         depthGroup.add(realObj);
 
-        const apparentObjMat = new THREE.MeshBasicMaterial({ color: 0xff80ab, transparent: true, opacity: 0.6 });
+        const apparentObjMat = new THREE.MeshBasicMaterial({ color: 0xfb7185, transparent: true, opacity: 0.5 });
         const apparentObj = new THREE.Mesh(realObjGeo, apparentObjMat);
         depthGroup.add(apparentObj);
 
-        // 真實與虛擬物體連線
         const depthLineGeo = new THREE.BufferGeometry();
-        const depthLineMat = new THREE.LineDashedMaterial({ color: 0xff0055, dashSize: 0.08, gapSize: 0.08 });
+        const depthLineMat = new THREE.LineDashedMaterial({ color: 0xf43f5e, dashSize: 0.08, gapSize: 0.08 });
         const depthLine = new THREE.Line(depthLineGeo, depthLineMat);
         depthGroup.add(depthLine);
 
-        // --- 核心物理計算與 3D 更新 ---
+        // Update Physics & Snell's Law
         function updatePhysics() {
             const n1 = params.n1;
             const n2 = params.n2;
             const theta1 = params.theta1;
 
-            // 1. 計算斯涅爾定律 Snell's Law
             const sinTheta1 = Math.sin(theta1);
             const sinTheta2 = (n1 / n2) * sinTheta1;
             let isTIR = false;
             let theta2 = 0;
 
             if (sinTheta2 > 1.0) {
-                isTIR = true; // 發生全內反射 Total Internal Reflection
+                isTIR = true;
             } else {
                 theta2 = Math.asin(sinTheta2);
             }
 
-            // 2. 臨界角計算 Critical Angle
-            let thetaC = null;
-            if (n1 > n2) {
-                thetaC = Math.asin(n2 / n1);
-            }
+            let thetaC = (n1 > n2) ? Math.asin(n2 / n1) : null;
 
-            // 3. 更新光線 3D 位置與姿態
-            const L = 3.5; // 光線顯示長度
-
-            // 入射光 (從介質 1 射向原點)
+            const L = 3.8;
             rayIncident.scale.set(1, L, 1);
             rayIncident.position.set(-L * Math.sin(theta1), L * Math.cos(theta1), 0);
             rayIncident.rotation.z = -(Math.PI - theta1);
 
-            // 反射光
             rayReflected.scale.set(1, L, 1);
             rayReflected.position.set(0, 0, 0);
             rayReflected.rotation.z = Math.PI - theta1;
 
-            // 折射光
             if (isTIR) {
                 rayRefracted.visible = false;
-                rayReflected.scale.set(1, L * 1.2, 1); // 全內反射時反射光增強
+                rayReflected.scale.set(1, L * 1.2, 1);
             } else {
                 rayRefracted.visible = true;
                 rayRefracted.scale.set(1, L, 1);
@@ -323,26 +345,28 @@
                 rayRefracted.rotation.z = Math.PI + theta2;
             }
 
-            // 4. 表觀深度計算 Apparent Depth (d' = d * n1 / n2)
+            // Apparent depth
             const realDepth = 2.0;
             const apparentDepth = realDepth * (n1 / n2);
             apparentObj.position.set(0, -apparentDepth, 0);
 
-            const dLinePts = [new THREE.Vector3(0, -realDepth, 0), new THREE.Vector3(0, 0, 0)];
-            depthLine.geometry.setFromPoints(dLinePts);
+            depthLine.geometry.setFromPoints([
+                new THREE.Vector3(0, -realDepth, 0),
+                new THREE.Vector3(0, 0, 0)
+            ]);
             depthLine.computeLineDistances();
 
-            // 5. 更新 UI 數據顯示
-            document.getElementById('out-theta2').textContent = isTIR ? "全內反射 (TIR)" : (theta2 * 180 / Math.PI).toFixed(1) + "°";
+            // Update UI
+            document.getElementById('out-theta2').textContent = isTIR ? "TIR (Total Internal Refl.)" : (theta2 * 180 / Math.PI).toFixed(1) + "°";
             document.getElementById('out-theta2').className = isTIR ? "alert-tir" : "highlight";
-            document.getElementById('out-thetac').textContent = thetaC ? (thetaC * 180 / Math.PI).toFixed(1) + "°" : "無 (需 n₁ > n₂)";
+            document.getElementById('out-thetac').textContent = thetaC ? (thetaC * 180 / Math.PI).toFixed(1) + "°" : "N/A (Requires n₁ > n₂)";
             
             const statusEl = document.getElementById('out-status');
             if (isTIR) {
-                statusEl.textContent = "全內反射 Total Internal Reflection";
+                statusEl.textContent = "Total Internal Reflection";
                 statusEl.style.color = "#ef4444";
             } else {
-                statusEl.textContent = "正常折射 (Refraction)";
+                statusEl.textContent = "Refraction";
                 statusEl.style.color = "#4ade80";
             }
 
@@ -355,8 +379,8 @@
             return { theta2, isTIR };
         }
 
-        // --- 流體水波波動動畫 (數學公式推算) ---
-        let clock = new THREE.Clock();
+        // Wave Animation & Projection Pattern Generation
+        const clock = new THREE.Clock();
 
         function animateWaves() {
             const time = clock.getElapsedTime();
@@ -366,20 +390,38 @@
             const omega = 2 * Math.PI * f;
             const k = (2 * Math.PI) / params.waveLength1;
 
-            // 波函數方程：z(x, y, t) = A * sin(k*x - omega*t) * cos(k*y * 0.5)
             for (let i = 0; i < pos.count; i++) {
                 const x = pos.getX(i);
-                const y = pos.getY(i); // PlaneGeometry 在 rotateX 後 y 軸即為 Z 軸
-                
-                // 模擬向外傳播的平面波與微小干涉
-                const z = A * Math.sin(k * x - omega * time) * Math.cos(y * 0.3);
+                const y = pos.getY(i);
+                const z = A * Math.sin(k * x - omega * time) * Math.cos(y * 0.2);
                 pos.setZ(i, z);
             }
             pos.needsUpdate = true;
             waveGeo.computeVertexNormals();
+
+            // Draw Bright/Dark Lines on Bottom Projection Canvas (Ripple Tank Lens Effect)
+            if (document.getElementById('chk-projection').checked) {
+                const w = projCanvas.width;
+                const h = projCanvas.height;
+                projCtx.fillStyle = '#0b0f19';
+                projCtx.fillRect(0, 0, w, h);
+
+                const numBands = 40;
+                for (let px = 0; px < w; px += 4) {
+                    const xNorm = (px / w - 0.5) * gridXZ;
+                    // Wave height derivative/curvature simulation for lens focusing
+                    const wavePhase = k * xNorm - omega * time;
+                    const brightness = 0.5 + 0.5 * Math.sin(wavePhase); // Crest = bright (convex focus), Trough = dark (concave divergence)
+                    
+                    const val = Math.floor(brightness * 220 + 20);
+                    projCtx.fillStyle = `rgb(${val}, ${val}, ${Math.min(255, val + 35)})`;
+                    projCtx.fillRect(px, 0, 4, h);
+                }
+                projTexture.needsUpdate = true;
+            }
         }
 
-        // --- 3D 空間文字標籤同步投影 ---
+        // 3D Screen Projection for Labels
         function updateLabels(physicsRes) {
             if (!document.getElementById('chk-labels').checked) {
                 document.querySelectorAll('.label-3d').forEach(el => el.style.display = 'none');
@@ -400,7 +442,7 @@
                 }
             }
 
-            const L = 1.5;
+            const L = 1.6;
             const t1 = params.theta1;
             project(new THREE.Vector3(-L * Math.sin(t1 / 2), L * Math.cos(t1 / 2), 0), 'label-theta1');
             
@@ -411,27 +453,24 @@
                 document.getElementById('label-theta2').style.display = 'none';
             }
 
-            project(new THREE.Vector3(-3.5, 1.0, 0), 'label-n1');
-            project(new THREE.Vector3(-3.5, -1.0, 0), 'label-n2');
+            project(new THREE.Vector3(-3.6, 1.0, 0), 'label-n1');
+            project(new THREE.Vector3(-3.6, -1.0, 0), 'label-n2');
             project(apparentObj.position, 'label-apparent');
         }
 
-        // --- 主渲染循環 ---
+        // Animation Loop
         function animate() {
             requestAnimationFrame(animate);
-            
             const physicsRes = updatePhysics();
             if (document.getElementById('chk-wave').checked) {
                 animateWaves();
             }
             controls.update();
             updateLabels(physicsRes);
-
             renderer.render(scene, camera);
         }
 
-        // --- 事件綁定與控制邏輯 ---
-        // 1. 滑塊事件
+        // Event Handlers
         document.getElementById('slider-n1').addEventListener('input', (e) => {
             params.n1 = parseFloat(e.target.value);
             document.getElementById('val-n1').textContent = params.n1.toFixed(2);
@@ -453,21 +492,27 @@
             document.getElementById('val-amp').textContent = params.amp.toFixed(2) + " m";
         });
 
-        // 2. 清單 Checklist 顯示/隱藏控制
+        // Visibility Toggles
         document.getElementById('chk-wave').addEventListener('change', (e) => waveGroup.visible = e.target.checked);
         document.getElementById('chk-rays').addEventListener('change', (e) => raysGroup.visible = e.target.checked);
         document.getElementById('chk-normal').addEventListener('change', (e) => normalGroup.visible = e.target.checked);
-        document.getElementById('chk-wavefront').addEventListener('change', (e) => wavefrontGroup.visible = e.target.checked);
+        document.getElementById('chk-projection').addEventListener('change', (e) => projectionGroup.visible = e.target.checked);
         document.getElementById('chk-depth').addEventListener('change', (e) => depthGroup.visible = e.target.checked);
 
-        // 3. 視窗大小響應
+        // Responsive Resizing
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // 啟動動畫
+        // Re-render LaTeX math formulas properly on load
+        window.addEventListener('load', () => {
+            if (window.MathJax && window.MathJax.typesetPromise) {
+                window.MathJax.typesetPromise();
+            }
+        });
+
         animate();
     </script>
 </body>
